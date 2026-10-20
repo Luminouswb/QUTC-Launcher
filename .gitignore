@@ -1,0 +1,16 @@
+node_modules/
+vendor/electron/
+vendor/*.zip
+vendor/electron-full/
+data/
+QUTCData/
+dist/
+ui-preview/
+shot-*.png
+*.lnk
+*.log
+smoke-install*.log
+sample-*/
+sample-*.json
+.DS_Store
+Thumbs.db

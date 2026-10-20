@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QUTC Launcher</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app" hidden>
+      <aside class="sidebar">
+        <div class="brand" title="QUTC Minecraft Club">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <linearGradient id="qutc-g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#5bf0c8" />
+                <stop offset="100%" stop-color="#4a7dff" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="60" height="60" rx="17" fill="#0b1116" stroke="#223040" stroke-width="2" />
+            <circle cx="30" cy="29" r="15" fill="none" stroke="url(#qutc-g)" stroke-width="6" />
+            <rect x="35" y="34" width="17" height="7" rx="3.5" transform="rotate(45 35 34)" fill="url(#qutc-g)" />
+            <rect x="24" y="23" width="8" height="8" rx="2" fill="#5bf0c8" opacity="0.9" />
+          </svg>
+          <div class="brand-text">
+            <strong>QUTC</strong>
+            <span>Minecraft Club</span>
+          </div>
+        </div>
+
+        <nav class="nav" id="nav">
+          <button class="nav-item active" data-view="home">
+            <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+            <span>主页</span>
+          </button>
+          <button class="nav-item" data-view="versions">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16" /></svg>
+            <span>下载版本</span>
+          </button>
+          <button class="nav-item" data-view="modpacks">
+            <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" /></svg>
+            <span>整合包</span>
+          </button>
+          <button class="nav-item" data-view="mods">
+            <svg viewBox="0 0 24 24"><path d="M10 3h4v3.2a2 2 0 0 0 2.8 1.9l2.9-1.2 2 3.4-2.6 1.8a2 2 0 0 0 0 3.3l2.6 1.8-2 3.4-2.9-1.2a2 2 0 0 0-2.8 1.9V21h-4v-2.4a2 2 0 0 0-2.8-1.9l-2.9 1.2-2-3.4 2.6-1.8a2 2 0 0 0 0-3.3L3.3 7.3l2-3.4 2.9 1.2A2 2 0 0 0 11 3.2V3z" /></svg>
+            <span>MOD</span>
+          </button>
+          <button class="nav-item" data-view="accounts">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" /></svg>
+            <span>账户</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 9 19.35a1.7 1.7 0 0 0-1.87.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.65 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.65a1.7 1.7 0 0 0 1.03-1.56V3h4v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.87-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.35 9c.2.62.77 1.03 1.56 1.03H21v4h-.09A1.7 1.7 0 0 0 19.4 15z" /></svg>
+            <span>设置</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <button class="account-chip" id="account-chip" data-view="accounts">
+            <div class="avatar" id="account-avatar">Q</div>
+            <div class="account-meta">
+              <strong id="account-name">未登录</strong>
+              <span id="account-type">点击添加账户</span>
+            </div>
+          </button>
+          <div class="version-line">
+            <span>QUTC Launcher</span>
+            <span id="app-version">v1.0.0</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="view-title">主页</h1>
+            <p id="view-subtitle">QUTC Minecraft 社团专属启动器</p>
+          </div>
+          <div class="top-actions" id="top-actions"></div>
+        </header>
+
+        <div class="content" id="content">
+          <section class="view" id="view-home">
+            <div class="hero">
+              <div>
+                <div class="hero-tag">QUTC · MINECRAFT CLUB</div>
+                <h2>欢迎回来，<span id="hero-name">冒险家</span></h2>
+                <p>下载原版全版本、管理社团整合包、正版或离线启动。所有下载均校验官方哈希。</p>
+              </div>
+              <div class="hero-actions">
+                <button class="btn primary" id="btn-new-instance">新建实例</button>
+                <button class="btn ghost" id="btn-import">导入实例</button>
+              </div>
+            </div>
+            <div class="section-head">
+              <h3>我的实例</h3>
+              <span class="muted" id="instance-count">0 个实例</span>
+            </div>
+            <div class="instance-grid" id="instance-grid"></div>
+            <div class="empty" id="instance-empty" hidden>
+              <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" /></svg>
+              <h4>还没有实例</h4>
+              <p>创建一个实例，选择 Minecraft 版本与加载器，QUTC 会自动完成下载与校验。</p>
+              <button class="btn primary" id="btn-new-instance-2">创建第一个实例</button>
+            </div>
+          </section>
+
+          <section class="view" id="view-versions" hidden>
+            <div class="panel">
+              <div class="toolbar">
+                <input class="input grow" id="version-search" type="search" placeholder="搜索版本号，例如 1.20.1 / 1.8.9 / 24w14a" />
+                <select class="input" id="version-type">
+                  <option value="release">正式版</option>
+                  <option value="snapshot">快照</option>
+                  <option value="old">远古版本</option>
+                  <option value="all">全部</option>
+                </select>
+                <button class="btn ghost" id="btn-refresh-manifest" title="刷新版本清单">刷新</button>
+              </div>
+              <div class="hint">全部版本数据来自 Mojang 官方 piston-meta，下载后逐文件校验 SHA-1。</div>
+              <div class="list" id="version-list"></div>
+              <div class="list-foot" id="version-foot"></div>
+            </div>
+          </section>
+
+          <section class="view" id="view-modpacks" hidden>
+            <div class="panel">
+              <div class="toolbar">
+                <input class="input grow" id="pack-search" type="search" placeholder="搜索 Modrinth 整合包，例如 Fabulously Optimized" />
+                <button class="btn primary" id="btn-pack-search">搜索</button>
+                <button class="btn ghost" id="btn-pack-local">导入本地 .mrpack</button>
+              </div>
+              <div class="hint">整合包来自 Modrinth 官方 API；下载文件必须通过 SHA-1/SHA-512 校验才会写入实例。</div>
+              <div class="pack-grid" id="pack-grid"></div>
+              <div class="empty" id="pack-empty">
+                <h4>搜索整合包</h4>
+                <p>输入关键词，或在 Modrinth 上找到整合包后使用本地导入。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-mods" hidden>
+            <div class="panel">
+              <div class="toolbar">
+                <select class="input mod-instance" id="mod-instance" title="选择要安装 MOD 的实例"></select>
+                <input class="input grow" id="mod-search" type="search" placeholder="搜索 Modrinth MOD，例如 Sodium / JEI / Mod Menu" />
+                <button class="btn primary" id="btn-mod-search">搜索</button>
+                <button class="btn ghost" id="btn-mod-new-instance">新建实例</button>
+              </div>
+              <div class="hint" id="mod-hint">选择实例后搜索；只会显示适配该实例版本与加载器的 MOD。</div>
+              <div class="row mod-external">
+                <span class="hint">中文名不够用？到</span>
+                <button class="btn ghost small" id="btn-mod-mcmod">MC百科搜索</button>
+                <button class="btn ghost small" id="btn-mod-minebbs">MINEBBS 搜索</button>
+                <span class="hint">下载 jar 后可手动导入：</span>
+                <button class="btn ghost small" id="btn-mod-local">导入本地 MOD</button>
+              </div>
+              <div class="pack-grid" id="mod-grid"></div>
+              <div class="empty" id="mod-empty">
+                <h4>下载 MOD</h4>
+                <p>先选择一个带加载器的实例，再搜索 Modrinth。安装时会自动下载 required 依赖并校验 SHA-1。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-accounts" hidden>
+            <div class="account-layout">
+              <div class="panel">
+                <div class="section-head"><h3>已添加账户</h3><span class="muted" id="account-count"></span></div>
+                <div class="account-list" id="account-list"></div>
+              </div>
+              <div class="stack">
+                <div class="panel">
+                  <h3>微软正版登录</h3>
+                  <p class="muted">使用微软设备码登录，不在启动器内输入密码。需要社团管理员配置 Azure Client ID。</p>
+                  <button class="btn primary" id="btn-ms-login">开始正版登录</button>
+                  <div class="device-box" id="device-box" hidden>
+                    <div class="device-code" id="device-code">----</div>
+                    <p>在浏览器打开 <a id="device-link" href="#">microsoft.com/link</a> 并输入上面的代码。</p>
+                    <p class="muted" id="device-status">等待授权…</p>
+                    <button class="btn ghost small" id="btn-ms-cancel">取消登录</button>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>离线模式</h3>
+                  <p class="muted">离线账户仅用于局域网/社团内服，不能进入正版服务器。用户名 3-16 位英文、数字或下划线。</p>
+                  <div class="row">
+                    <input class="input grow" id="offline-name" maxlength="16" placeholder="离线用户名" />
+                    <button class="btn" id="btn-offline-add">添加</button>
+                  </div>
+                  <p class="hint">离线 UUID 由用户名按 Minecraft 规则生成，同一用户名在不同电脑上保持一致。</p>
+                </div>
+                <div class="panel">
+                  <h3>第三方外置登录（authlib-injector）</h3>
+                  <p class="muted">支持任意 HTTPS Yggdrasil / authlib-injector 验证服务器，例如 LittleSkin。密码只发送给该验证服务器，不保存。</p>
+                  <label class="field">
+                    <span>验证服务器 API 地址</span>
+                    <input class="input" id="ygg-auth-server" maxlength="500" value="https://littleskin.cn/api/yggdrasil" placeholder="https://example.com/api/yggdrasil" />
+                    <div class="row">
+                      <button class="btn ghost small" id="btn-ygg-littleskin">使用 LittleSkin</button>
+                      <span class="hint" id="ygg-server-status">尚未校验服务器</span>
+                    </div>
+                  </label>
+                  <div class="drop-zone" id="ygg-drop">
+                    把第三方网站的一键登录按钮拖到这里，自动填入验证服务器地址
+                  </div>
+                  <label class="field">
+                    <span>账号 / 邮箱</span>
+                    <input class="input" id="ygg-username" maxlength="128" autocomplete="username" placeholder="you@example.com" />
+                  </label>
+                  <label class="field">
+                    <span>密码</span>
+                    <input class="input" id="ygg-password" type="password" maxlength="256" autocomplete="current-password" placeholder="只用于本次登录" />
+                  </label>
+                  <button class="btn primary" id="btn-ygg-login">登录外置账号</button>
+                  <p class="hint">外置登录不能登录正版服务器。请确认验证服务器可访问，并只在你信任的服务器输入密码。</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-settings" hidden>
+            <div class="settings-grid">
+              <div class="panel">
+                <h3>游戏</h3>
+                <label class="field">
+                  <span>内存分配 <b id="memory-label">4096 MB</b></span>
+                  <input type="range" id="set-memory" min="1024" max="16384" step="512" />
+                  <span class="hint">建议 4-8 GB；过高可能导致系统卡顿。</span>
+                </label>
+                <label class="field">
+                  <span>Java 路径</span>
+                  <div class="row">
+                    <input class="input grow" id="set-java" placeholder="留空则自动检测/下载官方 Java" />
+                    <button class="btn ghost" id="btn-java-browse">浏览</button>
+                  </div>
+                  <div class="row">
+                    <button class="btn ghost small" id="btn-java-detect">检测已安装 Java</button>
+                    <span class="hint" id="java-detect-result"></span>
+                  </div>
+                </label>
+                <label class="field">
+                  <span>自定义分辨率</span>
+                  <div class="row">
+                    <input class="input" id="set-width" type="number" min="320" max="7680" placeholder="1280" />
+                    <span class="muted">×</span>
+                    <input class="input" id="set-height" type="number" min="240" max="4320" placeholder="720" />
+                    <label class="check inline"><input type="checkbox" id="set-resolution-on" /> 启用</label>
+                  </div>
+                </label>
+                <label class="check"><input type="checkbox" id="set-close-launch" /> 启动游戏后关闭启动器</label>
+                <label class="check"><input type="checkbox" id="set-show-log" /> 显示游戏日志面板</label>
+              </div>
+
+              <div class="panel">
+                <h3>下载与网络</h3>
+                <label class="field">
+                  <span>下载源</span>
+                  <select class="input" id="set-mirror">
+                    <option value="official">Mojang 官方（推荐，海外网络）</option>
+                    <option value="bmclapi">BMCLAPI 镜像（国内加速）</option>
+                  </select>
+                  <span class="hint">镜像只改变下载地址，文件仍以 Mojang 官方 SHA-1 校验。</span>
+                </label>
+                <label class="field">
+                  <span>并发下载数</span>
+                  <input class="input" id="set-concurrency" type="number" min="1" max="32" />
+                </label>
+                <label class="field">
+                  <span>额外 JVM 参数</span>
+                  <input class="input" id="set-jvm" placeholder="例如 -Dfml.ignoreInvalidMinecraftCertificates=true" />
+                </label>
+                <label class="field">
+                  <span>额外游戏参数</span>
+                  <input class="input" id="set-gameargs" placeholder="例如 --fullscreen" />
+                </label>
+                <button class="btn primary" id="btn-save-settings">保存设置</button>
+                <div class="row">
+                  <button class="btn ghost small" id="btn-open-data">打开数据目录</button>
+                  <button class="btn ghost small" id="btn-open-logs">打开日志目录</button>
+                </div>
+              </div>
+
+              <div class="panel">
+                <h3>正版登录（社团 Azure 应用）</h3>
+                <label class="field">
+                  <span>Microsoft OAuth Client ID</span>
+                  <input class="input" id="set-client-id" placeholder="00000000-0000-0000-0000-000000000000" />
+                  <span class="hint">由社团管理员在 Azure 门户注册公共客户端后填写，不会上传到任何服务器。</span>
+                </label>
+                <button class="btn" id="btn-save-client-id">保存 Client ID</button>
+                <div class="divider"></div>
+                <h3>关于 QUTC Launcher</h3>
+                <p class="muted">QUTC Minecraft Club 内部启动器。纯本地运行，无遥测、无广告、无第三方账号上传。</p>
+                <ul class="security-list">
+                  <li>渲染进程无 Node 权限，所有操作走白名单 IPC。</li>
+                  <li>原版与资源全部校验 Mojang 官方 SHA-1。</li>
+                  <li>Forge/NeoForge 官方安装器需显式同意，并优先校验 SHA-1。</li>
+                  <li>实例压缩包解压前检查路径穿越、符号链接与压缩炸弹。</li>
+                </ul>
+                <button class="btn ghost small" id="btn-show-log">查看启动器日志</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <div class="task-panel" id="task-panel" hidden>
+        <div class="task-head">
+          <div>
+            <strong id="task-label">正在处理…</strong>
+            <div class="task-phase" id="task-phase">准备中</div>
+          </div>
+          <button class="icon-btn" id="btn-task-toggle" title="展开/收起日志">⌃</button>
+          <button class="btn danger small" id="btn-task-cancel">取消</button>
+        </div>
+        <div class="progress"><div class="progress-bar" id="task-bar"></div></div>
+        <div class="task-stats" id="task-stats"></div>
+        <div class="task-log" id="task-log" hidden></div>
+      </div>
+
+      <div class="log-drawer" id="log-drawer" hidden>
+        <div class="log-head">
+          <strong>游戏日志</strong>
+          <div class="row">
+            <button class="btn ghost small" id="btn-stop-game">结束游戏</button>
+            <button class="icon-btn" id="btn-close-log">×</button>
+          </div>
+        </div>
+        <div class="log-body" id="log-body"></div>
+      </div>
+
+      <div class="modal-root" id="modal-root" hidden></div>
+      <div class="toast-root" id="toast-root"></div>
+
+      <div class="loading" id="loading">
+        <svg class="brand-mark spin" viewBox="0 0 64 64">
+          <circle cx="30" cy="29" r="15" fill="none" stroke="#5bf0c8" stroke-width="5" stroke-dasharray="60 30" />
+        </svg>
+        <span>正在初始化 QUTC Launcher…</span>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

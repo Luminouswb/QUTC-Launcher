@@ -1,0 +1,27 @@
+{
+  "name": "qutc-launcher",
+  "productName": "QUTC Launcher",
+  "version": "1.0.0",
+  "description": "QUTC Minecraft Club Launcher - 社团内部 MC 启动器",
+  "main": "src/main/main.js",
+  "private": true,
+  "author": "QUTC Minecraft Club",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "test": "node scripts/test.js",
+    "smoke:ipc": "node scripts/smoke-ipc.js",
+    "smoke:auth": "node scripts/smoke-auth.js",
+    "smoke:yggdrasil": "node scripts/smoke-yggdrasil.js",
+    "smoke:authlib": "node scripts/smoke-authlib.js",
+    "smoke:instance": "node scripts/smoke-instance.js",
+    "smoke:install": "node scripts/smoke-install.js",
+    "smoke:modpack": "node scripts/smoke-modpack.js",
+    "smoke:mod": "node scripts/smoke-mod.js",
+    "smoke:ui-mods": "node scripts/smoke-ui-mods.js",
+    "preview": "node scripts/preview-ui.js shot-home.png home",
+    "package": "node scripts/package-win.js",
+    "install:local": "node scripts/install-local.js",
+    "icons": "python scripts/make-icon.py"
+  }
+}
