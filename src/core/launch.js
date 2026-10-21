@@ -127,7 +127,9 @@ async function buildLaunchCommand(instance, account, options = {}) {
     await writeJsonAtomic(nativesMarker, { key: markerKey, versionId: instance.versionId, at: Date.now() });
   }
 
-  const gameDir = Paths.getPaths().instanceGameDir(instance.id);
+  const gameDir = instance.externalGameDir
+    ? path.resolve(String(instance.externalGameDir))
+    : Paths.getPaths().instanceGameDir(instance.id);
   await ensureDirAsync(gameDir);
 
   const custom = options.customResolution || config.customResolution || { enabled: false };

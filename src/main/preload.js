@@ -59,6 +59,8 @@ contextBridge.exposeInMainWorld('qutc', {
   instances: {
     list: () => invoke('instances:list'),
     create: (options) => invoke('instances:create', options),
+    pickExternalFolder: () => invoke('instances:pick-external-folder'),
+    createExternal: (options) => invoke('instances:create-external', options),
     update: (id, patch) => invoke('instances:update', { id, ...patch }),
     remove: (id) => invoke('instances:delete', { id }),
     duplicate: (id, name) => invoke('instances:duplicate', { id, name }),

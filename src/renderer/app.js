@@ -228,6 +228,7 @@ function instanceCard(instance) {
     el('span', 'pill accent', instance.loader && instance.loader.type !== 'vanilla' ? loaderLabel(instance.loader) : '原版'),
   );
   if (instance.loader && instance.loader.version) meta.appendChild(el('span', 'pill', instance.loader.version));
+  if (instance.external) meta.appendChild(el('span', 'pill blue', '外部目录'));
   meta.appendChild(el('span', 'pill', instance.lastPlayedAt ? `上次 ${fmtDate(instance.lastPlayedAt)}` : '从未启动'));
   card.appendChild(meta);
 
@@ -254,12 +255,16 @@ function instanceMenu(instance) {
     subtitle: `${instance.versionId} · ${loaderLabel(instance.loader)}${instance.modpack ? ' · 整合包实例' : ''}`,
     build: (body) => {
       const info = el('div', 'hint');
-      info.textContent = `游戏目录: instances/${instance.id}/minecraft`;
+      info.textContent = instance.external
+        ? `外部游戏目录（原地使用）: ${instance.externalPath}`
+        : `游戏目录: instances/${instance.id}/minecraft`;
       body.appendChild(info);
     },
     actions: [
       { label: '重命名', kind: 'ghost', onClick: (close) => { close(); renameInstance(instance); } },
-      { label: '复制实例', kind: 'ghost', onClick: (close) => { close(); duplicateInstance(instance); } },
+      ...(instance.external
+        ? []
+        : [{ label: '复制实例', kind: 'ghost', onClick: (close) => { close(); duplicateInstance(instance); } }]),
       { label: '打开文件夹', kind: 'ghost', onClick: () => api.instances.openFolder(instance.id) },
       { label: '删除', kind: 'danger', onClick: (close) => { close(); deleteInstance(instance); } },
       { label: '关闭', kind: '', onClick: (close) => close() },
@@ -297,6 +302,75 @@ function renameInstance(instance) {
   });
 }
 
+async function addExistingFolder() {
+  let folder;
+  try {
+    folder = await api.instances.pickExternalFolder();
+  } catch (err) {
+    showError(err);
+    return;
+  }
+  if (!folder) return;
+  let versions = [];
+  try {
+    versions = await api.versions.installed();
+  } catch (err) {
+    showError(err);
+    return;
+  }
+  if (!versions.length) {
+    showError(new Error('还没有安装任何版本。请先在「下载版本」安装一个版本，再添加已有文件夹。'));
+    return;
+  }
+  const baseName = String(folder).split(/[\\/]/).filter(Boolean).pop() || '外部实例';
+  const ui = {};
+  openModal({
+    title: '添加已有文件夹',
+    subtitle: '原地使用：只注册目录，不复制、不移动原文件。',
+    build: (body) => {
+      body.appendChild(el('div', 'hint', `游戏目录：${folder}`));
+      const nameField = el('label', 'field');
+      nameField.appendChild(el('span', '', '实例名称'));
+      const nameInput = el('input', 'input');
+      nameInput.value = baseName;
+      nameInput.maxLength = 48;
+      nameField.appendChild(nameInput);
+      body.appendChild(nameField);
+      const versionField = el('label', 'field');
+      versionField.appendChild(el('span', '', '使用已安装的版本 / 加载器'));
+      const select = el('select', 'input');
+      for (const version of versions) select.appendChild(new Option(version, version));
+      versionField.appendChild(select);
+      versionField.appendChild(el('span', 'hint', 'MOD、存档、配置都从你选择的文件夹读取；版本库和资源仍由 QUTC 管理。'));
+      body.appendChild(versionField);
+      body.appendChild(el('div', 'hint', '外部实例删除时只移除注册，不会删除原文件夹。'));
+      ui.values = { nameInput, select };
+    },
+    actions: [
+      { label: '取消', kind: 'ghost', onClick: (close) => close() },
+      {
+        label: '添加',
+        kind: 'primary',
+        onClick: async (close) => {
+          const v = ui.values;
+          try {
+            await api.instances.createExternal({
+              name: v.nameInput.value.trim() || baseName,
+              folder,
+              versionId: v.select.value,
+            });
+            close();
+            await refreshInstances();
+            toast('已添加外部文件夹实例', 'ok');
+          } catch (err) {
+            showError(err);
+          }
+        },
+      },
+    ],
+  });
+}
+
 async function duplicateInstance(instance) {
   try {
     await api.instances.duplicate(instance.id, `${instance.name} 副本`);
@@ -308,7 +382,10 @@ async function duplicateInstance(instance) {
 }
 
 async function deleteInstance(instance) {
-  const ok = await confirmDialog('删除实例', `确定删除「${instance.name}」吗？文件会移入回收目录，不会立即永久删除。`, {
+  const message = instance.external
+    ? `确定移除「${instance.name}」的外部目录注册吗？只删除 QUTC 的注册信息，不会删除原文件夹。`
+    : `确定删除「${instance.name}」吗？文件会移入回收目录，不会立即永久删除。`;
+  const ok = await confirmDialog('删除实例', message, {
     okText: '删除',
     danger: true,
   });
@@ -1380,6 +1457,7 @@ async function refreshAccounts() {
 
 function bindStaticEvents() {
   $('btn-new-instance').addEventListener('click', () => openCreateInstance());
+  $('btn-add-folder').addEventListener('click', addExistingFolder);
   $('btn-new-instance-2').addEventListener('click', () => openCreateInstance());
   $('btn-import').addEventListener('click', async () => {
     try {

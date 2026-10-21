@@ -1,6 +1,6 @@
 # QUTC Launcher
 
-QUTC Minecraft 社团的 Windows 启动器（Electron，原生 JavaScript）。支持原版下载、微软设备码登录、Yggdrasil 外置登录、离线模式、Fabric / Quilt / Forge / NeoForge，以及 Modrinth 整合包和 MOD。界面截图在 `docs/`。仓库不包含 Minecraft 游戏文件。
+QUTC Minecraft 社团的 Windows 启动器（Electron，原生 JavaScript）。支持原版下载、微软设备码登录、Yggdrasil 外置登录、离线模式、Fabric / Quilt / Forge / NeoForge，以及 Modrinth 整合包和 MOD。支持把已有游戏文件夹原地注册为实例。界面截图在 `docs/`。仓库不包含 Minecraft 游戏文件。
 
 ## 部署
 
@@ -32,6 +32,23 @@ npm start
 ```
 
 也可以双击 `run.cmd`。第一次会自动准备 Electron 运行时。测试用 `npm test`。
+
+## 外部文件夹实例
+
+主页的「添加已有文件夹」可以把已有的游戏目录原地加入 QUTC：
+
+1. 选择已有的 `.minecraft` 游戏目录（不是它的上一级目录）
+2. 输入实例名称
+3. 选择一个已经安装的 QUTC 版本 / 加载器
+4. 添加后直接使用原目录中的 `mods`、`config`、`saves`
+
+不会复制文件；删除这个外部实例只会移除 QUTC 的注册信息，不会删除原文件夹。版本库、资源、Java 仍由 QUTC 管理，所以需要先安装对应版本。
+
+测试：
+
+```powershell
+node scripts/smoke-external.js
+```
 
 ## 正版登录
 

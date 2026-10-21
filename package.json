@@ -15,6 +15,7 @@
     "smoke:yggdrasil": "node scripts/smoke-yggdrasil.js",
     "smoke:authlib": "node scripts/smoke-authlib.js",
     "smoke:instance": "node scripts/smoke-instance.js",
+    "smoke:external": "node scripts/smoke-external.js",
     "smoke:install": "node scripts/smoke-install.js",
     "smoke:modpack": "node scripts/smoke-modpack.js",
     "smoke:mod": "node scripts/smoke-mod.js",

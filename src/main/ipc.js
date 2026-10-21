@@ -368,8 +368,44 @@ async function registerIpc({ windows, getMainWindow }) {
 
   handle('instances:open-folder', async (payload) => {
     const id = instanceId(obj(payload).id);
-    await shell.openPath(p.instanceGameDir(id));
+    await shell.openPath(await Instances.getGameDir(id));
     return true;
+  });
+
+  handle('instances:pick-external-folder', async () => {
+    const win = getMainWindow();
+    const result = await dialog.showOpenDialog(win, {
+      title: '选择已有的 Minecraft 游戏目录',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return result.filePaths[0];
+  });
+
+  handle('instances:create-external', async (payload) => {
+    const opts = obj(payload);
+    const name = sanitizeName(text(opts.name, '实例名称', 48), '外部实例');
+    const id = versionId(opts.versionId);
+    if (!fs.existsSync(p.versionJson(id))) throw new Error('该版本尚未安装，请先在「下载版本」安装');
+    const json = await Versions.loadVersionJson(id);
+    const mainClass = String(json.mainClass || '');
+    const lowerId = id.toLowerCase();
+    let loader = { type: 'vanilla', version: '' };
+    if (/quilt/i.test(mainClass) || lowerId.includes('quilt')) loader = { type: 'quilt', version: '' };
+    else if (/fabric/i.test(mainClass) || lowerId.includes('fabric')) loader = { type: 'fabric', version: '' };
+    else if (lowerId.includes('neoforge') || /neoforge/i.test(mainClass)) loader = { type: 'neoforge', version: '' };
+    else if (lowerId.includes('forge') || /bootstraplauncher|forge/i.test(mainClass)) loader = { type: 'forge', version: '' };
+    const mcVersion = String(json.inheritsFrom || json.id || id);
+    const instance = await Instances.createExternalInstance({
+      name,
+      versionId: id,
+      mcVersion,
+      loader,
+      externalGameDir: text(opts.folder, '游戏目录', 1000),
+    });
+    appendLauncherLog(`[实例] 注册外部目录 ${instance.name} -> ${opts.folder}`);
+    send('instances:changed', {});
+    return instance;
   });
 
   handle('instances:export', async (payload) => {

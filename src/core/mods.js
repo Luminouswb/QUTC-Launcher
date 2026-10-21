@@ -151,7 +151,7 @@ async function installMod(options, ctx = {}) {
   }
   if (!pickModFile(rootVersion)) throw new Error('该 MOD 版本没有可下载的 .jar 文件');
 
-  const modsDir = path.join(Paths.getPaths().instanceGameDir(instance.id), 'mods');
+  const modsDir = path.join(Instances.gameDirForInstance(instance), 'mods');
   await ensureDirAsync(modsDir);
   const manifestPath = path.join(modsDir, MANIFEST_NAME);
   let manifest = await readJson(manifestPath, { version: 1, projects: {} });
@@ -273,7 +273,7 @@ async function installLocalJar(instanceId, sourceFile, ctx = {}) {
   const stat = await fsp.stat(source);
   if (!stat.isFile()) throw new Error('不是文件');
   if (stat.size > 100 * 1024 * 1024) throw new Error('MOD 文件超过 100MB');
-  const modsDir = path.join(Paths.getPaths().instanceGameDir(instance.id), 'mods');
+  const modsDir = path.join(Instances.gameDirForInstance(instance), 'mods');
   await ensureDirAsync(modsDir);
   const filename = sanitizeModFilename(path.basename(source), `local-${Date.now()}`);
   const dest = path.join(modsDir, filename);

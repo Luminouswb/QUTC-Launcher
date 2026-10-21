@@ -106,7 +106,19 @@ function publicInstance(data) {
     memoryMb: data.memoryMb || 0,
     modpack: data.modpack || null,
     notes: data.notes || '',
+    external: Boolean(data.externalGameDir),
+    externalPath: data.externalGameDir || '',
   };
+}
+
+/** 实例实际使用的游戏目录：外部实例直接使用用户选择的原目录 */
+function gameDirForInstance(data) {
+  if (data && data.externalGameDir) return path.resolve(String(data.externalGameDir));
+  return Paths.getPaths().instanceGameDir(assertInstanceId(data && data.id));
+}
+
+async function getGameDir(id) {
+  return gameDirForInstance(await getInstance(id));
 }
 
 async function getInstance(id) {
@@ -142,6 +154,47 @@ async function createInstance(options) {
   return publicInstance(data);
 }
 
+/**
+ * 原地注册一个已有游戏目录：只写实例元数据，不复制/移动用户文件。
+ * @param {{name:string, versionId:string, mcVersion?:string, loader?:object, externalGameDir:string}} options
+ */
+async function createExternalInstance(options) {
+  const name = sanitizeName(options.name || '外部实例');
+  const versionId = assertVersionId(options.versionId);
+  const raw = String(options.externalGameDir || '').trim();
+  if (!raw || !path.isAbsolute(raw)) throw new Error('外部游戏目录必须是绝对路径');
+  let real;
+  try {
+    real = await fsp.realpath(raw);
+  } catch {
+    throw new Error('选择的文件夹不存在');
+  }
+  const stat = await fsp.stat(real);
+  if (!stat.isDirectory()) throw new Error('选择的路径不是文件夹');
+  if (isInside(Paths.getPaths().root, real)) {
+    throw new Error('不能把 QUTC 数据目录内部注册为外部实例');
+  }
+  const id = `i${Date.now().toString(36)}${randomId(3)}`;
+  const dir = instanceDir(id);
+  await ensureDirAsync(path.join(dir, 'natives'));
+  const data = {
+    id,
+    name,
+    versionId,
+    mcVersion: options.mcVersion || versionId,
+    loader: normalizeLoader(options.loader),
+    externalGameDir: real,
+    createdAt: nowIso(),
+    lastPlayedAt: '',
+    playTimeMs: 0,
+    memoryMb: options.memoryMb || 0,
+    modpack: null,
+    notes: '外部目录（原地使用，不复制文件）',
+  };
+  await writeJsonAtomic(Paths.getPaths().instanceFile(id), data);
+  return publicInstance(data);
+}
+
 async function updateInstance(id, patch) {
   const data = await getInstance(id);
   const allowed = ['name', 'memoryMb', 'notes', 'icon'];
@@ -160,6 +213,12 @@ async function renameInstance(id, name) {
 }
 
 async function deleteInstance(id) {
+  const data = await getInstance(id);
+  if (data.externalGameDir) {
+    // 外部实例只删除 QUTC 自己的元数据，绝不动用户选择的原目录
+    await fsp.rm(instanceDir(id), { recursive: true, force: true });
+    return true;
+  }
   const dir = instanceDir(id);
   const trashRoot = path.join(Paths.getPaths().root, 'trash');
   await ensureDirAsync(trashRoot);
@@ -173,6 +232,7 @@ async function deleteInstance(id) {
 
 async function duplicateInstance(id, newName) {
   const source = await getInstance(id);
+  if (source.externalGameDir) throw new Error('外部文件夹实例不支持复制，请重新添加目录');
   const created = await createInstance({
     name: uniqueName(newName || `${source.name} 副本`, (await listInstances()).map((i) => i.name)),
     versionId: source.versionId,
@@ -207,7 +267,7 @@ async function updateLastPlayed(id, durationMs = 0) {
  */
 async function exportInstance(id, destFile, { onProgress, abort } = {}) {
   const data = await getInstance(id);
-  const gameDir = Paths.getPaths().instanceGameDir(id);
+  const gameDir = gameDirForInstance(data);
   const files = await listFilesRecursive(gameDir);
   const filtered = files.filter((file) => {
     const rel = file.rel.replace(/\\/g, '/');
@@ -315,6 +375,9 @@ module.exports = {
   listInstances,
   getInstance,
   createInstance,
+  createExternalInstance,
+  gameDirForInstance,
+  getGameDir,
   updateInstance,
   renameInstance,
   deleteInstance,
