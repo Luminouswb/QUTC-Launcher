@@ -1,84 +1,116 @@
 'use strict';
 
 /**
- * 生成便携版：dist/QUTC-Launcher/
+ * 组装 Windows 便携目录。
  *
- * 结构（Electron 便携应用）：
- *   QUTC Launcher.exe          （C# 引导器：优先启动 LocalAppData/旁边的 runtime）
- *   QUTC Launcher.runtime.exe  （Electron 本体）
- *   resources/app/{package.json,src,...}
- *   ...Electron 运行时
+ *   QUTC Launcher.exe          由 build/launcher-bootstrap.cs 编译的引导器
+ *   QUTC Launcher.runtime.exe  Electron 本体
+ *   resources/app/             启动器源码
  *
- * 运行：node scripts/package-win.js [--no-zip]
+ * 直接运行会输出到 dist/QUTC-Launcher，并默认打 zip。
+ * 日常安装请用 node scripts/setup.js。
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { root, electronDir, ensureElectron, compileBootstrap } = require('./runtime');
 
-const root = path.join(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
-const distRoot = path.join(root, 'dist');
-const outDir = path.join(distRoot, 'QUTC-Launcher');
-const electronDir = path.join(root, 'vendor', 'electron');
-const bootstrap = path.join(root, 'build', 'launcher-bootstrap.exe');
 
-if (!fs.existsSync(path.join(electronDir, 'electron.exe'))) {
-  console.error('缺少 vendor/electron/electron.exe，无法打包。');
-  process.exit(1);
-}
-if (!fs.existsSync(bootstrap)) {
-  console.error('缺少 build/launcher-bootstrap.exe，无法打包。');
-  process.exit(1);
+function portableDir() {
+  return path.join(root, 'dist', 'QUTC-Launcher');
 }
 
-fs.rmSync(outDir, { recursive: true, force: true });
-fs.mkdirSync(outDir, { recursive: true });
-fs.cpSync(electronDir, outDir, { recursive: true });
-const oldExe = path.join(outDir, 'electron.exe');
-if (fs.existsSync(oldExe)) fs.renameSync(oldExe, path.join(outDir, 'QUTC Launcher.runtime.exe'));
-fs.copyFileSync(bootstrap, path.join(outDir, 'QUTC Launcher.exe'));
-
-const appDir = path.join(outDir, 'resources', 'app');
-fs.mkdirSync(appDir, { recursive: true });
-fs.cpSync(path.join(root, 'src'), path.join(appDir, 'src'), { recursive: true });
-for (const file of ['package.json', 'README.md', 'SECURITY.md', 'LICENSE']) {
-  const source = path.join(root, file);
-  if (fs.existsSync(source)) fs.copyFileSync(source, path.join(appDir, file));
+function resetDir(outDir, keep) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const keepNames = new Set(keep || []);
+  for (const name of fs.readdirSync(outDir)) {
+    if (keepNames.has(name)) continue;
+    try {
+      fs.rmSync(path.join(outDir, name), { recursive: true, force: true });
+    } catch (err) {
+      throw new Error(`无法更新 ${outDir}。请先退出正在运行的 QUTC Launcher。${err.message}`);
+    }
+  }
 }
-fs.copyFileSync(path.join(root, 'build', 'icon.ico'), path.join(outDir, 'icon.ico'));
 
-const version = pkg.version;
-fs.writeFileSync(
-  path.join(outDir, '启动说明.txt'),
-  [
-    `QUTC Launcher v${version}`,
-    '',
-    '双击 “QUTC Launcher.exe” 启动。',
-    '如果双击无反应（常见于 DSH/沙箱工作区），请把整个 QUTC-Launcher 文件夹',
-    '复制到普通目录（例如 C:\\QUTC）后再双击；不要直接在受限工作区内运行。',
-    '首次启动会在 exe 同目录创建 QUTCData/（便携数据目录）。',
-    '账户、实例、游戏文件都在 QUTCData 中，备份时整个目录复制即可。',
-    'QUTC Minecraft Club 内部使用。',
-  ].join('\r\n'),
-  'utf8',
-);
+function buildPortable(outDir, options = {}) {
+  const exe = path.join(electronDir, 'electron.exe');
+  const bootstrap = path.join(root, 'build', 'launcher-bootstrap.exe');
+  if (!fs.existsSync(exe)) {
+    throw new Error('缺少 Electron 运行时。请先运行 node scripts/setup.js');
+  }
+  if (!fs.existsSync(bootstrap)) {
+    throw new Error('缺少引导器。请先运行 node scripts/setup.js');
+  }
 
-if (!process.argv.includes('--no-zip')) {
-  const zip = path.join(distRoot, `QUTC-Launcher-${version}-win-x64.zip`);
-  fs.rmSync(zip, { force: true });
-  console.log('正在压缩便携版（Electron 体积较大，请稍候）…');
-  const result = spawnSync(
-    'powershell',
+  resetDir(outDir, options.keep);
+  fs.cpSync(electronDir, outDir, { recursive: true });
+  fs.renameSync(path.join(outDir, 'electron.exe'), path.join(outDir, 'QUTC Launcher.runtime.exe'));
+  fs.copyFileSync(bootstrap, path.join(outDir, 'QUTC Launcher.exe'));
+  fs.copyFileSync(path.join(root, 'build', 'icon.ico'), path.join(outDir, 'icon.ico'));
+
+  const appDir = path.join(outDir, 'resources', 'app');
+  fs.mkdirSync(appDir, { recursive: true });
+  fs.cpSync(path.join(root, 'src'), path.join(appDir, 'src'), { recursive: true });
+  for (const file of ['package.json', 'README.md', 'SECURITY.md', 'LICENSE']) {
+    const source = path.join(root, file);
+    if (fs.existsSync(source)) fs.copyFileSync(source, path.join(appDir, file));
+  }
+
+  fs.writeFileSync(
+    path.join(outDir, '启动说明.txt'),
     [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -LiteralPath '${outDir.replace(/'/g, "''")}' -DestinationPath '${zip.replace(/'/g, "''")}' -CompressionLevel Optimal`,
-    ],
-    { stdio: 'inherit' },
+      `QUTC Launcher ${pkg.version}`,
+      '',
+      '双击 QUTC Launcher.exe 启动。',
+      '账号、实例和游戏文件保存在同目录的 QUTCData/，复制该目录即可备份。',
+      'QUTC Minecraft Club 内部使用。',
+    ].join('\r\n'),
+    'utf8',
   );
-  if (result.status !== 0) console.error('压缩失败，可手动压缩 dist/QUTC-Launcher。');
-  else console.log(`已生成 ${zip}`);
+
+  if (options.zip) {
+    const zip = path.join(root, 'dist', `QUTC-Launcher-${pkg.version}-win-x64.zip`);
+    fs.mkdirSync(path.dirname(zip), { recursive: true });
+    fs.rmSync(zip, { force: true });
+    console.log('正在压缩便携版...');
+    const result = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Compress-Archive -LiteralPath '${outDir.replace(/'/g, "''")}' -DestinationPath '${zip.replace(/'/g, "''")}' -CompressionLevel Optimal`,
+      ],
+      { stdio: 'inherit' },
+    );
+    if (result.status !== 0) {
+      console.error(`压缩失败，便携目录仍在 ${outDir}`);
+    } else {
+      console.log(`已生成 ${zip}`);
+    }
+  }
+
+  console.log(`便携目录: ${outDir}`);
+  return outDir;
 }
 
-console.log(`便携版目录：${outDir}`);
+async function main() {
+  if (process.platform !== 'win32') {
+    throw new Error('Windows 打包脚本只能在 Windows 上运行');
+  }
+  await ensureElectron();
+  compileBootstrap();
+  const zip = !process.argv.includes('--no-zip');
+  buildPortable(portableDir(), { zip });
+}
+
+module.exports = { buildPortable, portableDir };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message || err);
+    process.exit(1);
+  });
+}

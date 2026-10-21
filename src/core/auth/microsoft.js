@@ -1,22 +1,25 @@
 'use strict';
 
 /**
- * QUTC Launcher - 微软正版登录（OAuth 2.0 设备码流程）
+ * QUTC Launcher - 微软正版登录
  *
- * 流程：Microsoft OAuth → Xbox Live → XSTS → Minecraft Services → 玩家档案
- * 不在本地保存微软密码，仅保存加密后的 refresh_token。
+ * 使用 Minecraft 启动器公开客户端（client_id 00000000402b5328）的授权码流程：
+ * 登录窗口打开微软页面，用户在页面上输入密码，回调地址里的 code 换取令牌。
+ * 启动器不保存微软密码，只保存加密后的 refresh_token。
  *
- * 需要社团管理员在 Azure 门户注册一个“公共客户端”应用，并将 Client ID 填入设置。
- * 详细步骤见 README.md「正版登录配置」。
+ * 流程：授权码 → Xbox Live → XSTS → Minecraft Services → 玩家档案
  */
 
 const { assertSafeRemoteUrl } = require('../security');
 const { uuidDashed } = require('../hash');
 const { sleep } = require('../util');
 
-const OAUTH_BASE = 'https://login.microsoftonline.com/consumers/oauth2/v2.0';
-const SCOPE = 'XboxLive.signin offline_access';
-const UA = 'QUTC-Launcher/1.0';
+const CLIENT_ID = '00000000402b5328';
+const REDIRECT_URI = 'https://login.live.com/oauth20_desktop.srf';
+const SCOPE = 'service::user.auth.xboxlive.com::MBI_SSL';
+const AUTHORIZE_URL = 'https://login.live.com/oauth20_authorize.srf';
+const TOKEN_URL = 'https://login.live.com/oauth20_token.srf';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 class AuthError extends Error {
   constructor(message, code = '') {
@@ -51,10 +54,16 @@ async function requestJson(url, options, { timeout = 20000, retries = 2 } = {}) 
           json = { raw: text };
         }
         if (!res.ok) {
-          const detail =
-            (json && (json.error_description || json.error || json.message)) ||
-            `${res.status} ${res.statusText}`;
-          const err = new AuthError(`微软服务返回错误: ${detail}`, json && json.error);
+          const host = new URL(safe).host;
+          const xerr = json && json.XErr;
+          const described = json && (json.error_description || json.errorMessage || json.error);
+          const detail = described ? String(described).replace(/\s+/g, ' ').slice(0, 180) : '';
+          const message = xerr
+            ? `${host} 返回 ${res.status}（XErr ${xerr}）`
+            : detail
+              ? `${host} 返回 ${res.status}: ${detail}`
+              : `${host} 返回 ${res.status}`;
+          const err = new AuthError(message, (json && json.error) || '');
           err.status = res.status;
           err.body = json;
           err.retryAfter = Number(res.headers.get('retry-after')) || 0;
@@ -92,101 +101,127 @@ function postJson(url, body, extraHeaders = {}) {
   });
 }
 
-function requireClientId(clientId) {
-  const value = String(clientId || '').trim();
-  if (!value) {
-    throw new AuthError(
-      '尚未配置微软 OAuth Client ID。请在「设置 → 正版登录」中填写社团的 Azure 应用 Client ID（见 README）。',
-      'missing_client_id',
-    );
-  }
-  return value;
-}
-
-/** 第一步：申请设备码 */
-async function startDeviceCode(clientId) {
-  const id = requireClientId(clientId);
-  const json = await postForm(`${OAUTH_BASE}/devicecode`, {
-    client_id: id,
+function buildAuthorizeUrl() {
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: REDIRECT_URI,
     scope: SCOPE,
+    prompt: 'select_account',
   });
-  return {
-    deviceCode: json.device_code,
-    userCode: json.user_code,
-    verificationUri: json.verification_uri,
-    expiresIn: Number(json.expires_in) || 900,
-    interval: Number(json.interval) || 5,
-    message: json.message || '',
-  };
+  return `${AUTHORIZE_URL}?${params.toString()}`;
 }
 
 /**
- * 轮询设备码换取 Microsoft 令牌。
- * 返回 { accessToken, refreshToken, expiresIn }
+ * 识别微软登录回调。不是回调地址时返回 null。
+ * 回调带 error 或缺少 code 时抛出 AuthError。不记录 code。
  */
-async function pollDeviceCode(clientId, device, { signal, onStatus } = {}) {
-  const id = requireClientId(clientId);
-  const deadline = Date.now() + (device.expiresIn || 900) * 1000;
-  let interval = Math.max(2, device.interval || 5);
-  for (;;) {
-    if (signal && signal.cancelled) throw new AuthError('登录已取消', 'cancelled');
-    if (Date.now() > deadline) throw new AuthError('设备码已过期，请重新开始登录', 'expired');
-    if (onStatus) onStatus('等待浏览器中完成微软账号授权…');
-    try {
-      const json = await postForm(`${OAUTH_BASE}/token`, {
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        client_id: id,
-        device_code: device.deviceCode,
-      });
-      return {
-        accessToken: json.access_token,
-        refreshToken: json.refresh_token,
-        expiresIn: Number(json.expires_in) || 3600,
-      };
-    } catch (err) {
-      const code = err.code || '';
-      if (code === 'authorization_pending') {
-        await sleep(interval * 1000);
-        continue;
-      }
-      if (code === 'slow_down') {
-        interval += 5;
-        await sleep(interval * 1000);
-        continue;
-      }
-      if (code === 'expired_token') throw new AuthError('设备码已过期，请重新开始登录', 'expired');
-      if (code === 'authorization_declined') throw new AuthError('用户拒绝了授权', 'declined');
-      if (code === 'bad_verification_code') throw new AuthError('设备码无效，请重新开始登录', 'bad_code');
-      throw err;
-    }
+function parseRedirectUrl(input) {
+  let url;
+  try {
+    url = new URL(String(input));
+  } catch {
+    return null;
   }
+  if (url.protocol !== 'https:' || url.hostname !== 'login.live.com' || url.pathname !== '/oauth20_desktop.srf') {
+    return null;
+  }
+  const error = url.searchParams.get('error');
+  if (error) {
+    const description = url.searchParams.get('error_description') || '微软登录被拒绝';
+    throw new AuthError(String(description).slice(0, 300), String(error).slice(0, 80));
+  }
+  const code = queryParam(url, 'code');
+  if (!code || code.length > 4096) throw new AuthError('授权回调缺少有效的 code', 'bad_code');
+  return code;
 }
 
-/** 用 refresh_token 刷新微软令牌 */
-async function refreshMicrosoftToken(clientId, refreshToken) {
-  const id = requireClientId(clientId);
-  const json = await postForm(`${OAUTH_BASE}/token`, {
-    grant_type: 'refresh_token',
-    client_id: id,
-    refresh_token: refreshToken,
-    scope: SCOPE,
-  });
+/** 保留授权码里的 +。URLSearchParams 会把 + 当成空格，导致换票 401。 */
+function queryParam(url, name) {
+  const query = url.search.startsWith('?') ? url.search.slice(1) : '';
+  for (const part of query.split('&')) {
+    const eq = part.indexOf('=');
+    const key = decodeURIComponent(eq === -1 ? part : part.slice(0, eq));
+    if (key !== name) continue;
+    const raw = eq === -1 ? '' : part.slice(eq + 1);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return '';
+}
+
+function normalizeTokens(json, previousRefresh) {
+  if (!json || !json.access_token) throw new AuthError('微软登录未返回访问令牌');
+  const refreshToken = json.refresh_token || previousRefresh || '';
+  if (!refreshToken) throw new AuthError('微软登录未返回刷新令牌，请重试');
   return {
     accessToken: json.access_token,
-    refreshToken: json.refresh_token || refreshToken,
+    refreshToken,
     expiresIn: Number(json.expires_in) || 3600,
   };
 }
 
-/** Xbox Live 用户认证 */
+async function exchangeAuthCode(code) {
+  const value = String(code || '');
+  if (!value || value.length > 4096) throw new AuthError('授权码无效', 'bad_code');
+  const json = await postForm(TOKEN_URL, {
+    client_id: CLIENT_ID,
+    code: value,
+    grant_type: 'authorization_code',
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPE,
+  });
+  return normalizeTokens(json);
+}
+
+/** 用 refresh_token 刷新微软令牌 */
+async function refreshMicrosoftToken(refreshToken) {
+  try {
+    const json = await postForm(TOKEN_URL, {
+      client_id: CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      redirect_uri: REDIRECT_URI,
+      scope: SCOPE,
+    });
+    return normalizeTokens(json, refreshToken);
+  } catch (err) {
+    if (err && err.code === 'invalid_grant') {
+      throw new AuthError('微软登录已失效，请在「账户」页重新登录', 'invalid_grant');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Xbox Live 用户认证。
+ * 00000000402b5328 是 Xbox 官方客户端，RpsTicket 用 t=。
+ * 自建 Azure 应用才用 d=，这里只在 t= 被拒绝时再试一次。
+ */
 async function authenticateXboxLive(msAccessToken) {
+  let lastError;
+  for (const prefix of ['t=', 'd=']) {
+    try {
+      return await requestXboxUserToken(`${prefix}${msAccessToken}`);
+    } catch (err) {
+      lastError = err;
+      if (!err || err.status !== 401) throw err;
+    }
+  }
+  throw lastError || new AuthError('Xbox Live 认证失败');
+}
+
+async function requestXboxUserToken(rpsTicket) {
   const json = await postJson(
     'https://user.auth.xboxlive.com/user/authenticate',
     {
       Properties: {
         AuthMethod: 'RPS',
         SiteName: 'user.auth.xboxlive.com',
-        RpsTicket: `d=${msAccessToken}`,
+        RpsTicket: rpsTicket,
       },
       RelyingParty: 'http://auth.xboxlive.com',
       TokenType: 'JWT',
@@ -276,7 +311,7 @@ async function sleepRetry(ms) {
  * 完整登录链：Microsoft 令牌 → Minecraft 账号
  * @returns {{account:object, refreshToken:string}}
  */
-async function finishMicrosoftLogin({ msAccessToken, refreshToken, clientId }) {
+async function finishMicrosoftLogin({ msAccessToken, refreshToken }) {
   const xbl = await authenticateXboxLive(msAccessToken);
   const xsts = await authorizeXsts(xbl.token);
   const mc = await loginMinecraft(xsts);
@@ -315,24 +350,24 @@ async function finishMicrosoftLogin({ msAccessToken, refreshToken, clientId }) {
 }
 
 /** 使用 refresh_token 恢复会话（启动器重启后） */
-async function refreshMicrosoftAccount(clientId, refreshToken) {
-  const tokens = await refreshMicrosoftToken(clientId, refreshToken);
-  const result = await finishMicrosoftLogin({
+async function refreshMicrosoftAccount(refreshToken) {
+  const tokens = await refreshMicrosoftToken(refreshToken);
+  return finishMicrosoftLogin({
     msAccessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    clientId,
   });
-  return result;
 }
 
 module.exports = {
   AuthError,
-  startDeviceCode,
-  pollDeviceCode,
+  CLIENT_ID,
+  REDIRECT_URI,
+  buildAuthorizeUrl,
+  parseRedirectUrl,
+  exchangeAuthCode,
   refreshMicrosoftToken,
   finishMicrosoftLogin,
   refreshMicrosoftAccount,
   getProfile,
   checkOwnership,
-  requireClientId,
 };

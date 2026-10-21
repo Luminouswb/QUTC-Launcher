@@ -134,12 +134,25 @@ async function main() {
     }
   });
 
-  await test('安全：Client ID 必须是 GUID', () => {
+  await test('微软登录：只接受官方回调地址', () => {
+    const Auth = require('../src/core/auth/microsoft');
     assert.strictEqual(
-      Security.validateClientId('00000000-0000-0000-0000-000000000000'),
-      '00000000-0000-0000-0000-000000000000',
+      Auth.parseRedirectUrl('https://login.live.com/oauth20_desktop.srf?code=abc.def'),
+      'abc.def',
     );
-    assert.throws(() => Security.validateClientId('not-a-guid'));
+    assert.strictEqual(
+      Auth.parseRedirectUrl('https://login.live.com/oauth20_desktop.srf?code=M.C5+abc%2Bdef'),
+      'M.C5+abc+def',
+    );
+    assert.strictEqual(Auth.parseRedirectUrl('https://evil.example/oauth20_desktop.srf?code=abc'), null);
+    assert.throws(
+      () => Auth.parseRedirectUrl('https://login.live.com/oauth20_desktop.srf?error=access_denied'),
+      /拒绝/,
+    );
+    const authUrl = new URL(Auth.buildAuthorizeUrl());
+    assert.strictEqual(authUrl.searchParams.get('client_id'), Auth.CLIENT_ID);
+    assert.strictEqual(authUrl.searchParams.get('response_type'), 'code');
+    assert.strictEqual(authUrl.searchParams.has('client_secret'), false);
   });
 
   await test('路径：safeJoin 拒绝穿越', () => {

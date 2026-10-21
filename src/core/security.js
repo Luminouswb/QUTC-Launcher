@@ -51,6 +51,7 @@ const API_HOSTS = new Set([
   'cdn.modrinth.com',
   'api.minecraftservices.com',
   'login.microsoftonline.com',
+  'login.live.com',
   'user.auth.xboxlive.com',
   'xsts.auth.xboxlive.com',
   'meta.fabricmc.net',
@@ -133,16 +134,6 @@ function validateOfflineName(name) {
   return value;
 }
 
-/** 校验 Microsoft OAuth Client ID（GUID） */
-function validateClientId(clientId) {
-  const value = String(clientId || '').trim();
-  if (!value) return '';
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-    throw new Error('OAuth Client ID 格式不正确（应为 GUID）');
-  }
-  return value.toLowerCase();
-}
-
 module.exports = {
   EXTERNAL_ALLOWLIST,
   API_HOSTS,
@@ -151,5 +142,4 @@ module.exports = {
   isAllowedExternalUrl,
   isApiHost,
   validateOfflineName,
-  validateClientId,
 };

@@ -47,7 +47,7 @@ window.qutc = {
     platform: { os: 'win32', arch: 'x64' },
     config: {
       memoryMb: 4096, autoMemory: true, javaPath: '', mirror: 'bmclapi', downloadConcurrency: 12,
-      closeOnLaunch: false, showGameLog: true, msClientId: '',
+      closeOnLaunch: false, showGameLog: true,
       customResolution: { enabled: false, width: 1280, height: 720 },
       jvmArgsExtra: '', gameArgsExtra: '', acceptedSecurityNotice: true, showSnapshots: false
     },
@@ -87,7 +87,7 @@ window.qutc = {
     list: async () => window.__previewInstances || [], create: async () => {}, update: async () => {}, remove: async () => {},
     duplicate: async () => {}, openFolder: async () => {}, launch: async () => {}, stop: async () => {}, export: async () => null, import: async () => null
   },
-  accounts: { list: async () => ({ accounts: [], selectedId: null }), addOffline: async () => {}, yggdrasilLogin: async () => {}, msStart: async () => {}, msPoll: async () => {}, msCancel: async () => {}, select: async () => {}, remove: async () => {}, refresh: async () => {} },
+  accounts: { list: async () => ({ accounts: [], selectedId: null }), addOffline: async () => {}, yggdrasilLogin: async () => {}, msLogin: async () => {}, select: async () => {}, remove: async () => {}, refresh: async () => {} },
   modpack: { search: async () => ({ hits: [] }), versions: async () => [], install: async () => {}, pickLocal: async () => null, installLocal: async () => {} },
   mods: {
     search: async () => ({ hits: [
@@ -101,7 +101,7 @@ window.qutc = {
   },
   game: { status: async () => ({ running: false }), onLog: () => {}, onExit: () => {} },
   tasks: { cancel: async () => {}, status: async () => ({ active: false }), onStart: () => {}, onProgress: () => {}, onLog: () => {}, onDone: () => {} },
-  events: { onInstancesChanged: () => {}, onVersionsChanged: () => {}, onAccountsChanged: () => {}, onAuthStatus: () => {} }
+  events: { onInstancesChanged: () => {}, onVersionsChanged: () => {}, onAccountsChanged: () => {} }
 };
 setTimeout(() => {
   if ('${page}' === 'newinstance') {

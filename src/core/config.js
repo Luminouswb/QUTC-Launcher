@@ -4,11 +4,10 @@
  * QUTC Launcher - 全局配置
  */
 
-const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const Paths = require('./paths');
 const { readJson, writeJsonAtomic, ensureDirAsync } = require('./util');
-const { validateClientId } = require('./security');
 
 const DEFAULT_CONFIG = Object.freeze({
   version: 1,
@@ -23,7 +22,7 @@ const DEFAULT_CONFIG = Object.freeze({
   customResolution: { enabled: false, width: 1280, height: 720 },
   jvmArgsExtra: '',
   gameArgsExtra: '',
-  msClientId: '',
+  installationId: '',
   showSnapshots: false,
   language: 'zh-CN',
   acceptedSecurityNotice: false,
@@ -50,10 +49,9 @@ function normalize(raw) {
   config.customResolution.enabled = Boolean(config.customResolution.enabled);
   config.customResolution.width = clampInt(config.customResolution.width, 320, 7680, 1280);
   config.customResolution.height = clampInt(config.customResolution.height, 240, 4320, 720);
-  try {
-    config.msClientId = validateClientId(config.msClientId);
-  } catch {
-    config.msClientId = '';
+  delete config.msClientId;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(config.installationId || ''))) {
+    config.installationId = crypto.randomUUID();
   }
   return config;
 }
@@ -68,7 +66,7 @@ async function load() {
   const file = Paths.getPaths().configFile;
   const raw = await readJson(file, null);
   cached = normalize(raw);
-  if (!raw) await save(cached);
+  if (!raw || raw.installationId !== cached.installationId || raw.msClientId) await save(cached);
   return cached;
 }
 

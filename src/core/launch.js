@@ -64,7 +64,7 @@ async function resolveAssetsDir(versionJson) {
  * @param {object} instance
  * @param {object} account
  * @param {{memoryMb?:number, javaPath?:string, customResolution?:object, jvmArgsExtra?:string,
- *          gameArgsExtra?:string, msClientId?:string, onPhase?:Function, onLog?:Function}} options
+ *          gameArgsExtra?:string, onPhase?:Function, onLog?:Function}} options
  */
 async function buildLaunchCommand(instance, account, options = {}) {
   const config = require('./config').get();
@@ -148,7 +148,7 @@ async function buildLaunchCommand(instance, account, options = {}) {
     auth_access_token: accessToken,
     auth_session: `token:${accessToken}:${uuid}`,
     auth_xuid: account.xuid || '',
-    clientid: account.type === 'microsoft' ? options.msClientId || config.msClientId || '' : '',
+    clientid: config.installationId || '',
     user_type: account.type === 'microsoft' ? 'msa' : account.type === 'yggdrasil' ? 'mojang' : 'legacy',
     user_properties: '{}',
     version_name: instance.versionId,

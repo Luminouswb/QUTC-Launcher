@@ -25,7 +25,6 @@ const state = {
   task: null,
   gameRunning: false,
   gameInstanceId: '',
-  msLoginId: '',
   bootstrapped: false,
 };
 
@@ -1150,47 +1149,23 @@ function bindYggdrasilDnd() {
 
 async function startMsLogin() {
   const btn = $('btn-ms-login');
+  const status = $('ms-status');
   btn.disabled = true;
+  status.textContent = '请在弹出的窗口中登录微软账号。关闭窗口即取消。';
   try {
-    const device = await api.accounts.msStart();
-    state.msLoginId = device.loginId;
-    $('device-box').hidden = false;
-    $('device-code').textContent = device.userCode;
-    $('device-link').textContent = device.verificationUri.replace(/^https?:\/\//, '');
-    $('device-link').onclick = (event) => {
-      event.preventDefault();
-      api.openExternal(device.verificationUri).catch(showError);
-    };
-    $('device-status').textContent = '等待浏览器中完成授权…';
-    api.accounts
-      .msPoll(device.loginId)
-      .then(async () => {
-        $('device-box').hidden = true;
-        await refreshAccounts();
-        toast('正版登录成功', 'ok');
-      })
-      .catch((err) => {
-        $('device-status').textContent = `登录失败：${err.message}`;
-        if (err.code === 'cancelled') $('device-box').hidden = true;
-      })
-      .finally(() => {
-        btn.disabled = false;
-        state.msLoginId = '';
-      });
+    await api.accounts.msLogin();
+    status.textContent = '';
+    await refreshAccounts();
+    toast('正版登录成功', 'ok');
   } catch (err) {
+    if (err && err.code === 'cancelled') {
+      status.textContent = '已取消登录';
+    } else {
+      status.textContent = '';
+      showError(err);
+    }
+  } finally {
     btn.disabled = false;
-    showError(err);
-  }
-}
-
-async function cancelMsLogin() {
-  if (!state.msLoginId) return;
-  try {
-    await api.accounts.msCancel(state.msLoginId);
-    $('device-box').hidden = true;
-    $('device-status').textContent = '已取消登录';
-  } catch (err) {
-    showError(err);
   }
 }
 
@@ -1213,7 +1188,6 @@ function fillSettings() {
   $('set-concurrency').value = String(config.downloadConcurrency);
   $('set-jvm').value = config.jvmArgsExtra || '';
   $('set-gameargs').value = config.gameArgsExtra || '';
-  $('set-client-id').value = config.msClientId || '';
 }
 
 async function saveSettings() {
@@ -1238,15 +1212,6 @@ async function saveSettings() {
     state.config = await api.config.save(patch);
     fillSettings();
     toast('设置已保存', 'ok');
-  } catch (err) {
-    showError(err);
-  }
-}
-
-async function saveClientId() {
-  try {
-    state.config = await api.config.save({ msClientId: $('set-client-id').value.trim() });
-    toast('Client ID 已保存', 'ok');
   } catch (err) {
     showError(err);
   }
@@ -1493,7 +1458,6 @@ function bindStaticEvents() {
   });
 
   $('btn-ms-login').addEventListener('click', startMsLogin);
-  $('btn-ms-cancel').addEventListener('click', cancelMsLogin);
   $('btn-offline-add').addEventListener('click', addOfflineAccount);
   $('offline-name').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') addOfflineAccount();
@@ -1515,7 +1479,6 @@ function bindStaticEvents() {
     $('memory-label').textContent = `${event.target.value} MB`;
   });
   $('btn-save-settings').addEventListener('click', saveSettings);
-  $('btn-save-client-id').addEventListener('click', saveClientId);
   $('btn-java-browse').addEventListener('click', async () => {
     try {
       const file = await api.java.choosePath();
@@ -1537,11 +1500,6 @@ function bindStaticEvents() {
   api.events.onInstancesChanged(() => refreshInstances());
   api.events.onVersionsChanged(() => refreshInstalled());
   api.events.onAccountsChanged(() => refreshAccounts());
-  api.events.onAuthStatus((payload) => {
-    if (state.msLoginId && payload.loginId === state.msLoginId) {
-      $('device-status').textContent = payload.status;
-    }
-  });
 }
 
 function showSecurityNotice() {

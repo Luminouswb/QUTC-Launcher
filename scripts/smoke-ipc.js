@@ -94,8 +94,8 @@ async function main() {
   expectFail(await call('accounts:offline', { name: '中文名' }), '非法离线用户名');
   console.log('  ok  非法离线用户名被拒绝');
 
-  expectFail(await call('accounts:ms-start', null), '未配置 Client ID 的微软登录');
-  console.log('  ok  未配置 Client ID 时微软登录给出明确错误');
+  expectFail(await call('accounts:ms-login', null), '无窗口时的微软登录');
+  console.log('  ok  无窗口时微软登录给出明确错误');
 
   const saved = expectOk(await call('config:save', { memoryMb: 2048, mirror: 'bmclapi' }), '保存配置');
   if (saved.memoryMb !== 2048 || saved.mirror !== 'bmclapi') throw new Error('配置未生效');
