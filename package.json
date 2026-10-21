@@ -20,8 +20,9 @@
     "smoke:mod": "node scripts/smoke-mod.js",
     "smoke:ui-mods": "node scripts/smoke-ui-mods.js",
     "preview": "node scripts/preview-ui.js shot-home.png home",
-    "package": "node scripts/package-win.js",
-    "install:local": "node scripts/install-local.js",
+    "setup": "node scripts/setup.js",
+    "package": "node scripts/setup.js --portable --zip",
+    "install:local": "node scripts/setup.js",
     "icons": "python scripts/make-icon.py"
   }
 }

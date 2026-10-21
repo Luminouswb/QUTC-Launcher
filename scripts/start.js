@@ -19,7 +19,7 @@ const root = path.join(__dirname, '..');
 const vendor = path.join(root, 'vendor', 'electron');
 const vendorExe = path.join(vendor, 'electron.exe');
 if (!fs.existsSync(vendorExe)) {
-  console.error('未找到 vendor/electron/electron.exe，请先下载 Electron 运行时（见 README）。');
+  console.error('未找到 Electron 运行时。请先运行: node scripts/setup.js --runtime-only');
   process.exit(1);
 }
 

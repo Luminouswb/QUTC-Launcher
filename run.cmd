@@ -7,9 +7,13 @@ set "ELECTRON_RUN_AS_NODE="
 set "RUNTIME=%LOCALAPPDATA%\QUTC-Launcher\runtime"
 
 if not exist "%~dp0vendor\electron\electron.exe" (
-  echo Missing vendor\electron\electron.exe, see README.
-  pause
-  exit /b 1
+  echo Preparing Electron runtime...
+  node "%~dp0scripts\setup.js" --runtime-only
+  if errorlevel 1 (
+    echo Setup failed. Install Node.js 18+ and run: node scripts\setup.js
+    pause
+    exit /b 1
+  )
 )
 
 if not exist "%RUNTIME%\electron.exe" goto copy_runtime

@@ -10,7 +10,7 @@
 4. **不信任压缩包**。`.qutc` 与 `.mrpack` 都是 ZIP，解压前检查路径穿越、绝对路径、符号链接、加密条目、压缩炸弹；包内脚本不会被执行。
 5. **不收集数据**。没有遥测、统计、广告、自动更新请求；账号令牌只保存在本机。
 6. **MOD 是第三方游戏代码**。MOD 文件只写入实例的 `mods/`，文件名会清理路径字符，SHA-1 只证明文件与 Modrinth 登记一致，不代表 MOD 行为安全；请只安装社团信任的 MOD，启动器不会执行 MOD 安装脚本。
-7. **引导器透明**。便携版的 `QUTC Launcher.exe` 是一个约 30KB 的 C# 引导器（源码见 `build/launcher-bootstrap.cs`），只做一件事：启动同目录或 `%LOCALAPPDATA%\QUTC-Launcher` 下的 Electron 运行时；不联网、不下载、不写注册表。
+7. **引导器透明**。便携版的 `QUTC Launcher.exe` 由 `node scripts/setup.js` 从 `build/launcher-bootstrap.cs` 编译，仓库不提交这个 exe。它只启动同目录下的 Electron 运行时；不联网、不下载、不写注册表。
 
 ## 2. 代码来源与“借鉴”审查
 
@@ -65,7 +65,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 
 ## 4. 账号与隐私
 
-- 微软登录使用设备码流程：启动器只收到 `access_token` 与 `refresh_token`，不会接触微软密码。
+- 微软登录使用授权码流程：账户页打开一个独立窗口加载微软登录页。该窗口没有启动器 preload，也没有 Node 权限。用户在微软页面输入密码；窗口跳转到 `https://login.live.com/oauth20_desktop.srf` 时，启动器只取走授权码并立刻关闭窗口，不记录这个地址。客户端 ID 是 Minecraft 启动器的公开 ID `00000000402b5328`，没有 client secret。之前用设备码保存的刷新令牌需要重新登录一次。
 - `refresh_token` 通过 Electron `safeStorage.encryptString` 加密后写入 `accounts.json`；在 Windows 上由 DPAPI 绑定当前用户。
 - 渲染进程只能看到昵称、UUID、账号类型；`getRefreshToken` 只在主进程调用。
 - 游戏启动日志会隐藏 access token（`redactToken`），调试命令中不包含令牌。
@@ -108,7 +108,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 
 `node scripts/audit.js` 会扫描 `src/` 全部 JavaScript，检查动态执行、明文 HTTP、HTML 注入 sink、未授权的 `child_process` 调用，以及 Electron 的 `sandbox`/`contextIsolation`/`nodeIntegration`/CSP 基线。当前结果：
 
-- 扫描 28 个 JS 文件，0 个安全问题；
+- 扫描 29 个 JS 文件，0 个安全问题；
 - 唯一提示是 `src/core/paths.js` 读取 `QUTC_DATA`（便携数据目录，预期行为）；
 - `src/core/auth/microsoft.js` 中唯一的 `http://` 是 XSTS 的 `RelyingParty: http://auth.xboxlive.com`，它是协议字段而不是请求地址，审计脚本已单独允许。
 
@@ -117,7 +117,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 | 测试 | 结果 |
 | --- | --- |
 | `scripts/test.js` | 28 项通过 |
-| `scripts/audit.js` | 通过（28 个 JS 文件） |
+| `scripts/audit.js` | 通过（29 个 JS 文件） |
 | `scripts/smoke-ipc.js` | 通过（含 Mojang/Fabric/Modrinth 实时请求） |
 | `scripts/smoke-auth.js` | 通过（12 次 mock 请求，设备码→XBL→XSTS→MC→档案→刷新） |
 | `scripts/smoke-yggdrasil.js` | 通过（authlib-injector ALI/认证/刷新/拖拽 URI/协议限制 mock） |
@@ -131,4 +131,4 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 | Fabric 0.19.5 | 通过（主类 `net.fabricmc.loader.impl.launch.knot.KnotClient`） |
 | 真实 `.mrpack`（Sodium） | 通过（SHA-1 校验、overrides 应用） |
 
-尚未自动化验证：真实微软账号登录（需要社团 Azure Client ID）、真实外置账号登录（需要账号；当前仅验证错误响应与 mock 成功链）、真实游戏启动后的画面（需要显卡/桌面环境）、NeoForge 在部分网络的安装器下载。
+尚未自动化验证：真实微软账号在登录窗口中的完整交互（冒烟测试只覆盖离线协议字段）、真实外置账号登录（需要账号；当前仅验证错误响应与 mock 成功链）、真实游戏启动后的画面（需要显卡/桌面环境）、NeoForge 在部分网络的安装器下载。

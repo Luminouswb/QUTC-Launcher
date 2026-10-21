@@ -28,7 +28,8 @@ const { validateOfflineName, isAllowedExternalUrl } = require('../core/security'
 const { getJson } = require('../core/http');
 const { buildLaunchCommand, GameProcess } = require('../core/launch');
 const { detectJava } = require('../core/java');
-const { Abort, randomId, readJson, sanitizeName } = require('../core/util');
+const { Abort, readJson, sanitizeName } = require('../core/util');
+const { openMicrosoftLogin } = require('./ms-login');
 const { appendLauncherLog, getLogTail } = require('./log');
 
 const VERSION_ID_RE = /^[A-Za-z0-9._-]{1,90}$/;
@@ -47,7 +48,6 @@ async function registerIpc({ windows, getMainWindow }) {
     },
   });
   const tokenCache = new Map();
-  const loginSessions = new Map();
   const game = new GameProcess({
     onLog: (line) => broadcast(windows, 'game:log', { line }),
     onExit: (info) => {
@@ -177,7 +177,7 @@ async function registerIpc({ windows, getMainWindow }) {
 
   handle('config:save', async (payload) => {
     const patch = obj(payload);
-    const allowed = Object.keys(Config.DEFAULT_CONFIG);
+    const allowed = Object.keys(Config.DEFAULT_CONFIG).filter((key) => key !== 'installationId');
     const clean = {};
     for (const key of allowed) {
       if (patch[key] !== undefined) clean[key] = patch[key];
@@ -497,69 +497,25 @@ async function registerIpc({ windows, getMainWindow }) {
     return { accounts: accountStore.list(), selectedId: accountStore.selectedId() };
   });
 
-  handle('accounts:ms-start', async () => {
-    const clientId = Config.get().msClientId;
-    MicrosoftAuth.requireClientId(clientId);
-    const device = await MicrosoftAuth.startDeviceCode(clientId);
-    const loginId = randomId(8);
-    loginSessions.set(loginId, {
-      device,
-      clientId,
-      abort: new Abort(),
-      createdAt: Date.now(),
+  handle('accounts:ms-login', async () => {
+    const parent = getMainWindow();
+    if (!parent || parent.isDestroyed()) {
+      throw new MicrosoftAuth.AuthError('请在启动器窗口中登录微软账号', 'no_window');
+    }
+    const code = await openMicrosoftLogin(parent);
+    const tokens = await MicrosoftAuth.exchangeAuthCode(code);
+    const result = await MicrosoftAuth.finishMicrosoftLogin({
+      msAccessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     });
-    if (loginSessions.size > 8) {
-      const oldest = [...loginSessions.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt)[0];
-      if (oldest) loginSessions.delete(oldest[0]);
-    }
-    return {
-      loginId,
-      userCode: device.userCode,
-      verificationUri: device.verificationUri,
-      expiresIn: device.expiresIn,
-      interval: device.interval,
-      message: device.message,
-    };
-  });
-
-  handle('accounts:ms-poll', async (payload) => {
-    const loginId = text(obj(payload).loginId, '登录会话', 32);
-    const session = loginSessions.get(loginId);
-    if (!session) throw new Error('登录会话已失效，请重新开始');
-    try {
-      const tokens = await MicrosoftAuth.pollDeviceCode(session.clientId, session.device, {
-        signal: session.abort,
-        onStatus: (status) => send('auth:status', { loginId, status }),
-      });
-      send('auth:status', { loginId, status: '已完成微软授权，正在验证 Minecraft 账号…' });
-      const result = await MicrosoftAuth.finishMicrosoftLogin({
-        msAccessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        clientId: session.clientId,
-      });
-      await accountStore.upsert(result.account, { refreshToken: result.refreshToken, select: true });
-      tokenCache.set(result.account.id, {
-        accessToken: result.account.accessToken,
-        expiresAt: result.account.accessTokenExpiresAt,
-      });
-      loginSessions.delete(loginId);
-      appendLauncherLog(`[账号] 微软登录成功: ${result.account.name}`);
-      send('accounts:changed', {});
-      return { accounts: accountStore.list(), selectedId: accountStore.selectedId() };
-    } catch (err) {
-      loginSessions.delete(loginId);
-      throw err;
-    }
-  });
-
-  handle('accounts:ms-cancel', async (payload) => {
-    const loginId = text(obj(payload).loginId, '登录会话', 32);
-    const session = loginSessions.get(loginId);
-    if (session) {
-      session.abort.cancel();
-      loginSessions.delete(loginId);
-    }
-    return true;
+    await accountStore.upsert(result.account, { refreshToken: result.refreshToken, select: true });
+    tokenCache.set(result.account.id, {
+      accessToken: result.account.accessToken,
+      expiresAt: result.account.accessTokenExpiresAt,
+    });
+    appendLauncherLog(`[账号] 微软登录成功: ${result.account.name}`);
+    send('accounts:changed', {});
+    return { accounts: accountStore.list(), selectedId: accountStore.selectedId() };
   });
 
   handle('accounts:select', async (payload) => {
@@ -584,7 +540,7 @@ async function registerIpc({ windows, getMainWindow }) {
     if (stored.type !== 'microsoft') throw new Error('离线账号无需刷新');
     const refreshToken = await accountStore.getRefreshToken(stored.id);
     if (!refreshToken) throw new Error('该账号没有可用的刷新令牌，请重新登录');
-    const result = await MicrosoftAuth.refreshMicrosoftAccount(Config.get().msClientId, refreshToken);
+    const result = await MicrosoftAuth.refreshMicrosoftAccount(refreshToken);
     await accountStore.upsert(result.account, { refreshToken: result.refreshToken, select: false });
     tokenCache.set(result.account.id, {
       accessToken: result.account.accessToken,
@@ -647,9 +603,7 @@ async function registerIpc({ windows, getMainWindow }) {
     }
     const refreshToken = await accountStore.getRefreshToken(stored.id);
     if (!refreshToken) throw new Error('微软账号登录已过期，请在「账户」页重新登录');
-    const clientId = Config.get().msClientId;
-    MicrosoftAuth.requireClientId(clientId);
-    const result = await MicrosoftAuth.refreshMicrosoftAccount(clientId, refreshToken);
+    const result = await MicrosoftAuth.refreshMicrosoftAccount(refreshToken);
     await accountStore.upsert(result.account, { refreshToken: result.refreshToken, select: false });
     tokenCache.set(result.account.id, {
       accessToken: result.account.accessToken,

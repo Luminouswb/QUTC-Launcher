@@ -1,10 +1,10 @@
 node_modules/
-vendor/electron/
-vendor/*.zip
-vendor/electron-full/
+vendor/
 data/
 QUTCData/
 dist/
+build/*.exe
+build/*.pdb
 ui-preview/
 shot-*.png
 *.lnk

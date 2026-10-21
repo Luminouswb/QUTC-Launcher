@@ -74,9 +74,7 @@ contextBridge.exposeInMainWorld('qutc', {
     addOffline: (name) => invoke('accounts:offline', { name }),
     yggdrasilResolve: (url) => invoke('accounts:yggdrasil-resolve', { url }),
     yggdrasilLogin: (username, password, authServer) => invoke('accounts:yggdrasil-login', { username, password, authServer }),
-    msStart: () => invoke('accounts:ms-start'),
-    msPoll: (loginId) => invoke('accounts:ms-poll', { loginId }),
-    msCancel: (loginId) => invoke('accounts:ms-cancel', { loginId }),
+    msLogin: () => invoke('accounts:ms-login'),
     select: (id) => invoke('accounts:select', { id }),
     remove: (id) => invoke('accounts:remove', { id }),
     refresh: () => invoke('accounts:refresh'),
@@ -116,6 +114,5 @@ contextBridge.exposeInMainWorld('qutc', {
     onInstancesChanged: (cb) => on('instances:changed', cb),
     onVersionsChanged: (cb) => on('versions:changed', cb),
     onAccountsChanged: (cb) => on('accounts:changed', cb),
-    onAuthStatus: (cb) => on('auth:status', cb),
   },
 });

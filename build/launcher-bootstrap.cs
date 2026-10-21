@@ -54,8 +54,7 @@ static class Program
             {
                 MessageBox.Show(
                     "QUTC Launcher \u8fd0\u884c\u65f6\u7f3a\u5931\u3002\n\n" +
-                    "\u8bf7\u5148\u8fd0\u884c\uff1anode scripts/install-local.js\n" +
-                    "\u6216\u628a\u6574\u4e2a QUTC-Launcher \u6587\u4ef6\u5939\u590d\u5236\u5230\u666e\u901a\u76ee\u5f55\u540e\u518d\u8fd0\u884c\u3002",
+                    "\u8bf7\u5148\u5728\u9879\u76ee\u76ee\u5f55\u8fd0\u884c\uff1anode scripts/setup.js",
                     "QUTC Launcher",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);

@@ -49,7 +49,7 @@ async function main() {
 
   const base = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
   const runtime = path.join(base, 'QUTC-Launcher', 'runtime', 'electron.exe');
-  if (!fs.existsSync(runtime)) throw new Error(`缺少运行时: ${runtime}，请先运行 run.cmd 或 install-local.js`);
+  if (!fs.existsSync(runtime)) throw new Error(`缺少运行时: ${runtime}，请先运行 node scripts/setup.js --runtime-only`);
 
   const port = 9333;
   const env = { ...process.env, QUTC_DATA: dataRoot };

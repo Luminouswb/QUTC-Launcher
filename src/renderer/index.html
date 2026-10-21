@@ -176,14 +176,9 @@
               <div class="stack">
                 <div class="panel">
                   <h3>微软正版登录</h3>
-                  <p class="muted">使用微软设备码登录，不在启动器内输入密码。需要社团管理员配置 Azure Client ID。</p>
-                  <button class="btn primary" id="btn-ms-login">开始正版登录</button>
-                  <div class="device-box" id="device-box" hidden>
-                    <div class="device-code" id="device-code">----</div>
-                    <p>在浏览器打开 <a id="device-link" href="#">microsoft.com/link</a> 并输入上面的代码。</p>
-                    <p class="muted" id="device-status">等待授权…</p>
-                    <button class="btn ghost small" id="btn-ms-cancel">取消登录</button>
-                  </div>
+                  <p class="muted">点击后打开微软登录窗口，在窗口里登录即可。不需要设备码，也不需要配置 Azure。密码只输入在微软页面上。</p>
+                  <button class="btn primary" id="btn-ms-login">登录微软账号</button>
+                  <p class="hint" id="ms-status"></p>
                 </div>
                 <div class="panel">
                   <h3>离线模式</h3>
@@ -286,14 +281,6 @@
               </div>
 
               <div class="panel">
-                <h3>正版登录（社团 Azure 应用）</h3>
-                <label class="field">
-                  <span>Microsoft OAuth Client ID</span>
-                  <input class="input" id="set-client-id" placeholder="00000000-0000-0000-0000-000000000000" />
-                  <span class="hint">由社团管理员在 Azure 门户注册公共客户端后填写，不会上传到任何服务器。</span>
-                </label>
-                <button class="btn" id="btn-save-client-id">保存 Client ID</button>
-                <div class="divider"></div>
                 <h3>关于 QUTC Launcher</h3>
                 <p class="muted">QUTC Minecraft Club 内部启动器。纯本地运行，无遥测、无广告、无第三方账号上传。</p>
                 <ul class="security-list">
