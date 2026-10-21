@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('qutc', {
     remove: (id) => invoke('instances:delete', { id }),
     duplicate: (id, name) => invoke('instances:duplicate', { id, name }),
     openFolder: (id) => invoke('instances:open-folder', { id }),
+    openSubfolder: (id, kind) => invoke('instances:open-subfolder', { id, kind }),
     launch: (id) => invoke('instances:launch', { id }),
     stop: () => invoke('instances:stop'),
     export: (id) => invoke('instances:export', { id }),

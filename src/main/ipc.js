@@ -346,6 +346,16 @@ async function registerIpc({ windows, getMainWindow }) {
     if (opts.name !== undefined) patch.name = sanitizeName(text(opts.name, '实例名称', 48), '实例');
     if (opts.memoryMb !== undefined) patch.memoryMb = Number(opts.memoryMb) || 0;
     if (opts.notes !== undefined) patch.notes = String(opts.notes).slice(0, 500);
+    if (opts.jvmArgsExtra !== undefined) patch.jvmArgsExtra = String(opts.jvmArgsExtra).slice(0, 2000);
+    if (opts.gameArgsExtra !== undefined) patch.gameArgsExtra = String(opts.gameArgsExtra).slice(0, 2000);
+    if (opts.customResolution !== undefined) {
+      const res = obj(opts.customResolution);
+      patch.customResolution = {
+        enabled: res.enabled === true,
+        width: Number(res.width) || 1280,
+        height: Number(res.height) || 720,
+      };
+    }
     const instance = await Instances.updateInstance(id, patch);
     send('instances:changed', {});
     return instance;
@@ -369,6 +379,28 @@ async function registerIpc({ windows, getMainWindow }) {
   handle('instances:open-folder', async (payload) => {
     const id = instanceId(obj(payload).id);
     await shell.openPath(await Instances.getGameDir(id));
+    return true;
+  });
+
+  handle('instances:open-subfolder', async (payload) => {
+    const opts = obj(payload);
+    const id = instanceId(opts.id);
+    const kind = String(opts.kind || '');
+    const instance = await Instances.getInstance(id);
+    const gameDir = await Instances.getGameDir(id);
+    let target;
+    if (kind === 'version') {
+      target = p.versionDir(instance.versionId);
+    } else if (kind === 'instance') {
+      target = Instances.instanceDir(id);
+    } else if (['saves', 'resourcepacks', 'mods', 'config'].includes(kind)) {
+      target = path.join(gameDir, kind);
+      await fsp.mkdir(target, { recursive: true });
+    } else {
+      throw new Error('不支持打开的文件夹类型');
+    }
+    if (!fs.existsSync(target)) throw new Error('文件夹不存在');
+    await shell.openPath(target);
     return true;
   });
 
@@ -461,7 +493,7 @@ async function registerIpc({ windows, getMainWindow }) {
       if (config.showGameLog) send('game:log', { line: '[启动器] 正在准备启动…' });
       const command = await buildLaunchCommand(instance, account, {
         memoryMb: instance.memoryMb || config.memoryMb,
-        customResolution: config.customResolution,
+        customResolution: instance.customResolution || config.customResolution,
         onPhase: (phase) => send('game:log', { line: `[启动器] ${phase}` }),
         onLog: (line) => send('game:log', { line }),
         abort: null,

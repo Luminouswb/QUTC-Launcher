@@ -106,6 +106,9 @@ function publicInstance(data) {
     memoryMb: data.memoryMb || 0,
     modpack: data.modpack || null,
     notes: data.notes || '',
+    jvmArgsExtra: data.jvmArgsExtra || '',
+    gameArgsExtra: data.gameArgsExtra || '',
+    customResolution: data.customResolution || { enabled: false, width: 1280, height: 720 },
     external: Boolean(data.externalGameDir),
     externalPath: data.externalGameDir || '',
   };
@@ -149,6 +152,9 @@ async function createInstance(options) {
     memoryMb: options.memoryMb || 0,
     modpack: options.modpack || null,
     notes: '',
+    jvmArgsExtra: '',
+    gameArgsExtra: '',
+    customResolution: { enabled: false, width: 1280, height: 720 },
   };
   await writeJsonAtomic(Paths.getPaths().instanceFile(id), data);
   return publicInstance(data);
@@ -190,6 +196,9 @@ async function createExternalInstance(options) {
     memoryMb: options.memoryMb || 0,
     modpack: null,
     notes: '外部目录（原地使用，不复制文件）',
+    jvmArgsExtra: '',
+    gameArgsExtra: '',
+    customResolution: { enabled: false, width: 1280, height: 720 },
   };
   await writeJsonAtomic(Paths.getPaths().instanceFile(id), data);
   return publicInstance(data);
@@ -197,13 +206,23 @@ async function createExternalInstance(options) {
 
 async function updateInstance(id, patch) {
   const data = await getInstance(id);
-  const allowed = ['name', 'memoryMb', 'notes', 'icon'];
+  const allowed = ['name', 'memoryMb', 'notes', 'icon', 'jvmArgsExtra', 'gameArgsExtra', 'customResolution'];
   for (const key of allowed) {
     if (patch[key] !== undefined) data[key] = patch[key];
   }
   if (data.name !== undefined) data.name = sanitizeName(data.name, '实例');
   if (data.memoryMb !== undefined) data.memoryMb = Math.max(0, Math.min(65536, Number(data.memoryMb) || 0));
   if (data.notes !== undefined) data.notes = String(data.notes).slice(0, 500);
+  if (data.jvmArgsExtra !== undefined) data.jvmArgsExtra = String(data.jvmArgsExtra).slice(0, 2000);
+  if (data.gameArgsExtra !== undefined) data.gameArgsExtra = String(data.gameArgsExtra).slice(0, 2000);
+  if (data.customResolution !== undefined) {
+    const custom = data.customResolution || {};
+    data.customResolution = {
+      enabled: Boolean(custom.enabled),
+      width: Math.max(320, Math.min(7680, Number(custom.width) || 1280)),
+      height: Math.max(240, Math.min(4320, Number(custom.height) || 720)),
+    };
+  }
   await writeJsonAtomic(Paths.getPaths().instanceFile(assertInstanceId(id)), data);
   return publicInstance(data);
 }

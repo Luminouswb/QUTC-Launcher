@@ -132,7 +132,7 @@ async function buildLaunchCommand(instance, account, options = {}) {
     : Paths.getPaths().instanceGameDir(instance.id);
   await ensureDirAsync(gameDir);
 
-  const custom = options.customResolution || config.customResolution || { enabled: false };
+  const custom = options.customResolution || instance.customResolution || config.customResolution || { enabled: false };
   const features = {
     is_demo_user: false,
     has_custom_resolution: Boolean(custom.enabled),
@@ -212,7 +212,13 @@ async function buildLaunchCommand(instance, account, options = {}) {
     }
   }
 
-  const extraJvm = splitArgs(config.jvmArgsExtra || '');
+  const extraJvm = splitArgs(
+    options.jvmArgsExtra !== undefined
+      ? options.jvmArgsExtra
+      : instance.jvmArgsExtra !== undefined
+        ? instance.jvmArgsExtra
+        : config.jvmArgsExtra || '',
+  );
   jvmArgs.push(...extraJvm);
 
   // 游戏参数
@@ -229,7 +235,13 @@ async function buildLaunchCommand(instance, account, options = {}) {
   if (custom.enabled && !gameArgs.includes('--width')) {
     gameArgs.push('--width', String(custom.width), '--height', String(custom.height));
   }
-  const extraGame = splitArgs(config.gameArgsExtra || '');
+  const extraGame = splitArgs(
+    options.gameArgsExtra !== undefined
+      ? options.gameArgsExtra
+      : instance.gameArgsExtra !== undefined
+        ? instance.gameArgsExtra
+        : config.gameArgsExtra || '',
+  );
   gameArgs.push(...extraGame);
 
   const finalJvm = jvmArgs.map((arg) => replaceVars(arg, vars));

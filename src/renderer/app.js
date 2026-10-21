@@ -200,16 +200,97 @@ function loaderLabel(loader) {
   return LOADER_NAMES[loader.type] || loader.type || '原版';
 }
 
+function directoryName(folder) {
+  return String(folder).split(/[\\/]/).filter(Boolean).pop() || folder;
+}
+
 function renderInstances() {
   const grid = $('instance-grid');
   clear(grid);
   const list = state.instances;
+  const groups = new Map();
+  const normal = [];
+  for (const instance of list) {
+    if (instance.external && instance.externalPath) {
+      if (!groups.has(instance.externalPath)) groups.set(instance.externalPath, []);
+      groups.get(instance.externalPath).push(instance);
+    } else {
+      normal.push(instance);
+    }
+  }
+
+  const directoryGrid = $('directory-grid');
+  clear(directoryGrid);
+  $('directory-head').hidden = groups.size === 0;
+  directoryGrid.hidden = groups.size === 0;
+  $('directory-count').textContent = `${groups.size} 个项目目录`;
+  for (const [folder, instances] of groups) directoryGrid.appendChild(directoryCard(folder, instances));
+
   $('instance-count').textContent = `${list.length} 个实例`;
   $('instance-empty').hidden = list.length > 0;
-  grid.hidden = list.length === 0;
-  for (const instance of list) grid.appendChild(instanceCard(instance));
+  grid.hidden = normal.length === 0;
+  for (const instance of normal) grid.appendChild(instanceCard(instance));
   const selected = state.accounts.find((a) => a.selected);
   $('hero-name').textContent = selected ? selected.name : '冒险家';
+}
+
+function directoryCard(folder, instances) {
+  const card = el('div', 'instance-card');
+  const top = el('div', 'instance-top');
+  top.appendChild(el('div', 'instance-icon', 'DIR'));
+  const title = el('div', 'instance-title');
+  title.appendChild(el('strong', '', directoryName(folder)));
+  const pathText = el('span', 'directory-path', folder);
+  title.appendChild(pathText);
+  top.appendChild(title);
+  card.appendChild(top);
+
+  const meta = el('div', 'instance-meta');
+  meta.appendChild(el('span', 'pill blue', `${instances.length} 个版本`));
+  meta.appendChild(el('span', 'pill', '原地使用'));
+  card.appendChild(meta);
+
+  const actions = el('div', 'instance-actions');
+  const manage = el('button', 'btn primary', '管理版本');
+  manage.addEventListener('click', () => openDirectoryModal(folder, instances));
+  actions.appendChild(manage);
+  const open = el('button', 'btn ghost small', '打开目录');
+  open.addEventListener('click', () => api.instances.openFolder(instances[0].id).catch(showError));
+  actions.appendChild(open);
+  card.appendChild(actions);
+  return card;
+}
+
+function openDirectoryModal(folder, instances) {
+  openModal({
+    title: directoryName(folder),
+    subtitle: folder,
+    wide: true,
+    build: (body) => {
+      body.appendChild(el('div', 'hint', `这个目录下有 ${instances.length} 个版本实例，共享同一份 mods / saves / 配置。`));
+      for (const instance of instances) {
+        const row = el('div', 'account-row');
+        const meta = el('div', 'meta');
+        meta.appendChild(el('strong', '', instance.name));
+        meta.appendChild(el('span', '', `${instance.mcVersion || instance.versionId} · ${loaderLabel(instance.loader)}`));
+        row.appendChild(meta);
+        const launch = el('button', 'btn primary small', '启动');
+        launch.addEventListener('click', () => launchInstance(instance.id));
+        row.appendChild(launch);
+        const settings = el('button', 'btn ghost small', '设置');
+        settings.addEventListener('click', () => instanceMenu(instance));
+        row.appendChild(settings);
+        const open = el('button', 'btn ghost small', '打开');
+        open.addEventListener('click', () => api.instances.openSubfolder(instance.id, 'instance').catch(showError));
+        row.appendChild(open);
+        body.appendChild(row);
+      }
+    },
+    actions: [
+      { label: '添加版本到此目录', kind: 'primary', onClick: (close) => { close(); addExistingFolder(folder); } },
+      { label: '关闭', kind: 'ghost', onClick: (close) => close() },
+    ],
+  });
 }
 
 function instanceCard(instance) {
@@ -242,7 +323,7 @@ function instanceCard(instance) {
   exportBtn.addEventListener('click', () => exportInstance(instance));
   actions.appendChild(exportBtn);
 
-  const more = el('button', 'btn ghost small', '更多');
+  const more = el('button', 'btn ghost small', '设置');
   more.addEventListener('click', () => instanceMenu(instance));
   actions.appendChild(more);
   card.appendChild(actions);
@@ -250,24 +331,144 @@ function instanceCard(instance) {
 }
 
 function instanceMenu(instance) {
+  const ui = {};
   openModal({
     title: instance.name,
     subtitle: `${instance.versionId} · ${loaderLabel(instance.loader)}${instance.modpack ? ' · 整合包实例' : ''}`,
+    wide: true,
     build: (body) => {
-      const info = el('div', 'hint');
-      info.textContent = instance.external
-        ? `外部游戏目录（原地使用）: ${instance.externalPath}`
-        : `游戏目录: instances/${instance.id}/minecraft`;
-      body.appendChild(info);
+      body.appendChild(
+        el(
+          'div',
+          'hint',
+          instance.external
+            ? `外部游戏目录（原地使用）: ${instance.externalPath}`
+            : `游戏目录: instances/${instance.id}/minecraft`,
+        ),
+      );
+
+      const nameField = el('label', 'field');
+      nameField.appendChild(el('span', '', '实例名称'));
+      const nameInput = el('input', 'input');
+      nameInput.value = instance.name;
+      nameInput.maxLength = 48;
+      nameField.appendChild(nameInput);
+      body.appendChild(nameField);
+
+      const memField = el('label', 'field');
+      memField.appendChild(el('span', '', '本实例内存（MB，0 表示使用全局设置）'));
+      const memInput = el('input', 'input');
+      memInput.type = 'number';
+      memInput.min = '0';
+      memInput.max = '65536';
+      memInput.step = '512';
+      memInput.value = String(instance.memoryMb || 0);
+      memField.appendChild(memInput);
+      body.appendChild(memField);
+
+      const resField = el('label', 'field');
+      resField.appendChild(el('span', '', '本实例分辨率'));
+      const resRow = el('div', 'row');
+      const resEnabled = el('input');
+      resEnabled.type = 'checkbox';
+      resEnabled.checked = Boolean(instance.customResolution && instance.customResolution.enabled);
+      resRow.appendChild(resEnabled);
+      resRow.appendChild(el('span', 'muted', '启用'));
+      const widthInput = el('input', 'input');
+      widthInput.type = 'number';
+      widthInput.min = '320';
+      widthInput.max = '7680';
+      widthInput.value = String((instance.customResolution && instance.customResolution.width) || 1280);
+      widthInput.style.width = '90px';
+      const heightInput = el('input', 'input');
+      heightInput.type = 'number';
+      heightInput.min = '240';
+      heightInput.max = '4320';
+      heightInput.value = String((instance.customResolution && instance.customResolution.height) || 720);
+      heightInput.style.width = '90px';
+      resRow.appendChild(widthInput);
+      resRow.appendChild(el('span', 'muted', '×'));
+      resRow.appendChild(heightInput);
+      resField.appendChild(resRow);
+      body.appendChild(resField);
+
+      const jvmField = el('label', 'field');
+      jvmField.appendChild(el('span', '', '本实例额外 JVM 参数'));
+      const jvmInput = el('input', 'input');
+      jvmInput.value = instance.jvmArgsExtra || '';
+      jvmInput.placeholder = '例如 -Dfml.ignoreInvalidMinecraftCertificates=true';
+      jvmField.appendChild(jvmInput);
+      body.appendChild(jvmField);
+
+      const gameField = el('label', 'field');
+      gameField.appendChild(el('span', '', '本实例额外游戏参数'));
+      const gameInput = el('input', 'input');
+      gameInput.value = instance.gameArgsExtra || '';
+      gameInput.placeholder = '例如 --fullscreen';
+      gameField.appendChild(gameInput);
+      body.appendChild(gameField);
+
+      const notesField = el('label', 'field');
+      notesField.appendChild(el('span', '', '备注'));
+      const notesInput = el('input', 'input');
+      notesInput.value = instance.notes || '';
+      notesInput.maxLength = 500;
+      notesField.appendChild(notesInput);
+      body.appendChild(notesField);
+
+      body.appendChild(el('div', 'hint', '快捷打开：'));
+      const shortcuts = el('div', 'row');
+      for (const [kind, label] of [
+        ['version', '版本文件夹'],
+        ['saves', '存档文件夹'],
+        ['resourcepacks', '资源包文件夹'],
+        ['mods', 'MOD 文件夹'],
+        ['instance', '实例目录'],
+      ]) {
+        const btn = el('button', 'btn ghost small', label);
+        btn.addEventListener('click', () => api.instances.openSubfolder(instance.id, kind).catch(showError));
+        shortcuts.appendChild(btn);
+      }
+      body.appendChild(shortcuts);
+      body.appendChild(el('div', 'hint', '外部实例的版本文件夹是 QUTC 管理的版本目录；存档/资源包/MOD 会打开外部原目录。'));
+      ui.values = { nameInput, memInput, resEnabled, widthInput, heightInput, jvmInput, gameInput, notesInput };
     },
     actions: [
-      { label: '重命名', kind: 'ghost', onClick: (close) => { close(); renameInstance(instance); } },
-      ...(instance.external
-        ? []
-        : [{ label: '复制实例', kind: 'ghost', onClick: (close) => { close(); duplicateInstance(instance); } }]),
-      { label: '打开文件夹', kind: 'ghost', onClick: () => api.instances.openFolder(instance.id) },
-      { label: '删除', kind: 'danger', onClick: (close) => { close(); deleteInstance(instance); } },
-      { label: '关闭', kind: '', onClick: (close) => close() },
+      {
+        label: '保存设置',
+        kind: 'primary',
+        onClick: async (close) => {
+          const v = ui.values;
+          try {
+            await api.instances.update(instance.id, {
+              name: v.nameInput.value.trim() || instance.name,
+              memoryMb: Number(v.memInput.value) || 0,
+              jvmArgsExtra: v.jvmInput.value,
+              gameArgsExtra: v.gameInput.value,
+              notes: v.notesInput.value,
+              customResolution: {
+                enabled: v.resEnabled.checked,
+                width: Number(v.widthInput.value) || 1280,
+                height: Number(v.heightInput.value) || 720,
+              },
+            });
+            close();
+            await refreshInstances();
+            toast('实例设置已保存', 'ok');
+          } catch (err) {
+            showError(err);
+          }
+        },
+      },
+      {
+        label: '删除',
+        kind: 'danger',
+        onClick: (close) => {
+          close();
+          deleteInstance(instance);
+        },
+      },
+      { label: '关闭', kind: 'ghost', onClick: (close) => close() },
     ],
   });
 }
@@ -302,13 +503,15 @@ function renameInstance(instance) {
   });
 }
 
-async function addExistingFolder() {
-  let folder;
-  try {
-    folder = await api.instances.pickExternalFolder();
-  } catch (err) {
-    showError(err);
-    return;
+async function addExistingFolder(presetFolder) {
+  let folder = presetFolder;
+  if (!folder) {
+    try {
+      folder = await api.instances.pickExternalFolder();
+    } catch (err) {
+      showError(err);
+      return;
+    }
   }
   if (!folder) return;
   let versions = [];
@@ -323,6 +526,7 @@ async function addExistingFolder() {
     return;
   }
   const baseName = String(folder).split(/[\\/]/).filter(Boolean).pop() || '外部实例';
+  const sameFolder = state.instances.filter((item) => item.externalPath === folder).length;
   const ui = {};
   openModal({
     title: '添加已有文件夹',
@@ -332,7 +536,7 @@ async function addExistingFolder() {
       const nameField = el('label', 'field');
       nameField.appendChild(el('span', '', '实例名称'));
       const nameInput = el('input', 'input');
-      nameInput.value = baseName;
+      nameInput.value = sameFolder ? `${baseName} - ${versions[0]}` : baseName;
       nameInput.maxLength = 48;
       nameField.appendChild(nameInput);
       body.appendChild(nameField);
