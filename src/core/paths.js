@@ -77,6 +77,7 @@ function subdirs(root) {
     path.join(root, 'java'),
     path.join(root, 'instances'),
     path.join(root, 'logs'),
+    path.join(root, 'frp'),
   ];
 }
 
@@ -101,6 +102,8 @@ function getPaths() {
     java: path.join(r, 'java'),
     instances: path.join(r, 'instances'),
     logs: path.join(r, 'logs'),
+    frpDir: path.join(r, 'frp'),
+    frpcExe: () => path.join(r, 'frp', 'frpc.exe'),
     configFile: path.join(r, 'config.json'),
     accountsFile: path.join(r, 'accounts.json'),
     launcherLog: path.join(r, 'logs', 'launcher.log'),

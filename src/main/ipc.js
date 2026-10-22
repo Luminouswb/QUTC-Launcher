@@ -23,6 +23,7 @@ const Mods = require('../core/mods');
 const { AccountStore } = require('../core/auth/accounts');
 const MicrosoftAuth = require('../core/auth/microsoft');
 const YggdrasilAuth = require('../core/auth/yggdrasil');
+const Skin = require('../core/auth/skin');
 const { offlineUuid, uuidDashed } = require('../core/hash');
 const { validateOfflineName, isAllowedExternalUrl } = require('../core/security');
 const { getJson } = require('../core/http');
@@ -31,6 +32,7 @@ const { detectJava } = require('../core/java');
 const { Abort, readJson, sanitizeName } = require('../core/util');
 const { openMicrosoftLogin } = require('./ms-login');
 const { appendLauncherLog, getLogTail } = require('./log');
+const { FrpManager } = require('../core/frp');
 
 const VERSION_ID_RE = /^[A-Za-z0-9._-]{1,90}$/;
 const LOADERS = new Set(['vanilla', 'fabric', 'quilt', 'forge', 'neoforge']);
@@ -54,6 +56,10 @@ async function registerIpc({ windows, getMainWindow }) {
       broadcast(windows, 'game:exit', info);
       finishGame(info);
     },
+  });
+  const frp = new FrpManager({
+    onLog: (line) => broadcast(windows, 'frp:log', { line }),
+    onStateChange: () => broadcast(windows, 'frp:state', frp.status()),
   });
   let activeTask = null;
   let runningInstanceId = '';
@@ -120,6 +126,33 @@ async function registerIpc({ windows, getMainWindow }) {
     return value === true;
   }
 
+  function frpEncrypt(text) {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('系统安全存储不可用，无法加密保存访问密钥');
+    return safeStorage.encryptString(text).toString('base64');
+  }
+
+  function frpDecrypt(enc) {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('系统安全存储不可用，无法读取访问密钥');
+    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+  }
+
+  function frpAccessKey() {
+    const config = Config.get();
+    const enc = config.frp && typeof config.frp === 'object' ? config.frp.accessKeyEnc : '';
+    if (!enc) throw new Error('尚未配置樱花访问密钥，请在下方填写后保存');
+    try {
+      return frpDecrypt(enc);
+    } catch {
+      throw new Error('访问密钥解密失败，请重新保存凭据');
+    }
+  }
+
+  function frpTunnelId(value) {
+    const id = String(value == null ? '' : value).trim();
+    if (!/^\d{1,12}$/.test(id)) throw new Error('隧道 ID 非法');
+    return id;
+  }
+
   async function runTask(name, ctxExtra, runner) {
     if (activeTask) {
       throw new Error(`已有任务正在进行：${activeTask.label || activeTask.name}，请等待完成或取消`);
@@ -177,7 +210,7 @@ async function registerIpc({ windows, getMainWindow }) {
 
   handle('config:save', async (payload) => {
     const patch = obj(payload);
-    const allowed = Object.keys(Config.DEFAULT_CONFIG).filter((key) => key !== 'installationId');
+    const allowed = Object.keys(Config.DEFAULT_CONFIG).filter((key) => key !== 'installationId' && key !== 'frp');
     const clean = {};
     for (const key of allowed) {
       if (patch[key] !== undefined) clean[key] = patch[key];
@@ -220,6 +253,38 @@ async function registerIpc({ windows, getMainWindow }) {
     });
     if (result.canceled || !result.filePaths.length) return '';
     return result.filePaths[0];
+  });
+
+  async function clearBackgroundFiles() {
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      await fsp.rm(path.join(p.cache, `background.${ext}`), { force: true }).catch(() => {});
+    }
+  }
+
+  handle('appearance:pick-background', async () => {
+    const win = getMainWindow();
+    const result = await dialog.showOpenDialog(win, {
+      title: '选择背景图',
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    const src = result.filePaths[0];
+    const ext = path.extname(src).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) throw new Error('只支持 PNG / JPG / WebP 图片');
+    await clearBackgroundFiles();
+    const filename = `background${ext}`;
+    await fsp.copyFile(src, path.join(p.cache, filename));
+    await Config.save({ backgroundImage: filename });
+    appendLauncherLog('[外观] 已更新背景图');
+    return { backgroundImage: filename };
+  });
+
+  handle('appearance:clear-background', async () => {
+    await clearBackgroundFiles();
+    await Config.save({ backgroundImage: '' });
+    appendLauncherLog('[外观] 已清除背景图');
+    return { backgroundImage: '' };
   });
 
   /* ------------------------------------------------------------------ */
@@ -617,6 +682,42 @@ async function registerIpc({ windows, getMainWindow }) {
     return { accounts: accountStore.list(), selectedId: accountStore.selectedId() };
   });
 
+  handle('accounts:skin', async (payload) => {
+    const id = text(obj(payload).id, '账号 ID', 80);
+    const stored = accountStore.get(id);
+    if (!stored) throw new Error('账号不存在');
+    let accessToken = null;
+    try {
+      accessToken = await getSkinAccessToken(stored);
+    } catch {
+      accessToken = null;
+    }
+    const url = await Skin.fetchSkinTexture(stored, accessToken);
+    return { url };
+  });
+
+  async function getSkinAccessToken(stored) {
+    if (!stored) return null;
+    if (stored.type === 'offline') return null;
+    if (stored.type === 'yggdrasil') {
+      return accountStore.getRefreshToken(stored.id);
+    }
+    // microsoft：优先用内存里的 Minecraft 访问令牌，否则走刷新链
+    const cached = tokenCache.get(stored.id);
+    if (cached && cached.expiresAt && cached.expiresAt > Date.now() + 60 * 1000) {
+      return cached.accessToken;
+    }
+    const refreshToken = await accountStore.getRefreshToken(stored.id);
+    if (!refreshToken) return null;
+    const result = await MicrosoftAuth.refreshMicrosoftAccount(refreshToken);
+    await accountStore.upsert(result.account, { refreshToken: result.refreshToken, select: false });
+    tokenCache.set(result.account.id, {
+      accessToken: result.account.accessToken,
+      expiresAt: result.account.accessTokenExpiresAt,
+    });
+    return result.account.accessToken;
+  }
+
   async function resolveAccount() {
     const stored = accountStore.selected();
     if (!stored) return null;
@@ -852,6 +953,65 @@ async function registerIpc({ windows, getMainWindow }) {
   handle('task:status', async () => {
     if (!activeTask) return { active: false };
     return { active: true, name: activeTask.name, label: activeTask.label, startedAt: activeTask.startedAt };
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* 樱花内网穿透 (Sakura Frp)                                           */
+  /* ------------------------------------------------------------------ */
+
+  handle('frp:status', async () => {
+    const config = Config.get();
+    const frpCfg = config.frp && typeof config.frp === 'object' ? config.frp : {};
+    return {
+      configured: Boolean(frpCfg.accessKeyEnc),
+      account: frpCfg.account || '',
+      lastTunnelId: frpCfg.lastTunnelId || '',
+      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      ...frp.status(),
+    };
+  });
+
+  handle('frp:save-credentials', async (payload) => {
+    const opts = obj(payload);
+    const account = text(opts.account, '账号', 200);
+    if (typeof opts.accessKey !== 'string' || !opts.accessKey.trim()) throw new Error('请输入访问密钥');
+    if (opts.accessKey.length > 512) throw new Error('访问密钥过长');
+    const enc = frpEncrypt(opts.accessKey.trim());
+    const current = Config.get().frp || {};
+    await Config.save({ frp: { account, accessKeyEnc: enc, lastTunnelId: current.lastTunnelId || '' } });
+    appendLauncherLog('[樱花] 已加密保存访问密钥');
+    return { configured: true, account };
+  });
+
+  handle('frp:tunnels', async () => {
+    const tunnels = await frp.listTunnels(frpAccessKey());
+    return { tunnels };
+  });
+
+  handle('frp:start', async (payload) => {
+    const opts = obj(payload);
+    const tunnelId = frpTunnelId(opts.tunnelId);
+    const accessKey = frpAccessKey();
+    const exe = p.frpcExe();
+    broadcast(windows, 'frp:log', { line: '正在准备 frpc（首次使用需联网下载）…' });
+    await frp.downloadFrpc({ dest: exe });
+    const started = await frp.start({ accessKey, tunnelId, frpcPath: exe });
+    const current = Config.get().frp || {};
+    await Config.save({ frp: { ...current, lastTunnelId: tunnelId } });
+    appendLauncherLog(`[樱花] 已启动隧道 ${tunnelId}`);
+    return started;
+  });
+
+  handle('frp:stop', async () => {
+    const stopped = await frp.stop();
+    appendLauncherLog('[樱花] 已请求停止隧道');
+    return stopped;
+  });
+
+  handle('frp:clear-credentials', async () => {
+    await Config.save({ frp: { account: '', accessKeyEnc: '', lastTunnelId: '' } });
+    appendLauncherLog('[樱花] 已清除访问密钥');
+    return { configured: false };
   });
 
   /* ------------------------------------------------------------------ */

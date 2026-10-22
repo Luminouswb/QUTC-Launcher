@@ -88,6 +88,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 8. **MINEBBS / MC百科不做抓取**。两者没有公开稳定的 MOD 下载 API，启动器只提供搜索外链；从这些站点下载的 jar 由用户通过「导入本地 MOD」加入，启动器无法审计其内容。
 9. **authlib-injector 是第三方 javaagent**。启动器从官方地址下载并校验 SHA-256，但它会修改游戏网络鉴权行为；如社团要求零第三方 agent，可只使用微软/离线登录。
 10. **外部文件夹实例拥有原目录写权限**。添加后启动器会在该目录读写 `mods`、`config`、`saves`；删除实例只移除注册，不删除原目录。路径来自主进程文件夹选择框并做绝对路径/真实路径校验，但仍应只选择信任的游戏目录，不要指向系统目录或重要资料目录。
+11. **樱花内网穿透是第三方隧道服务**。启动器会下载并运行 Sakura Frp 的 frpc 二进制、以访问密钥连接其 API 与服务器。访问密钥用系统加密保存、经环境变量传入、不落日志；但 frpc 与 Sakura Frp 服务本身属于第三方黑盒，实际连通性需真实账号验证。建议社团对穿透流量做审计。
 
 ## 6. 审查清单（建议逐项勾选）
 
@@ -109,7 +110,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 
 `node scripts/audit.js` 会扫描 `src/` 全部 JavaScript，检查动态执行、明文 HTTP、HTML 注入 sink、未授权的 `child_process` 调用，以及 Electron 的 `sandbox`/`contextIsolation`/`nodeIntegration`/CSP 基线。当前结果：
 
-- 扫描 29 个 JS 文件，0 个安全问题；
+- 扫描 31 个 JS 文件，0 个安全问题；
 - 唯一提示是 `src/core/paths.js` 读取 `QUTC_DATA`（便携数据目录，预期行为）；
 - `src/core/auth/microsoft.js` 中唯一的 `http://` 是 XSTS 的 `RelyingParty: http://auth.xboxlive.com`，它是协议字段而不是请求地址，审计脚本已单独允许。
 
@@ -124,6 +125,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 | `scripts/smoke-yggdrasil.js` | 通过（authlib-injector ALI/认证/刷新/拖拽 URI/协议限制 mock） |
 | `scripts/smoke-instance.js` | 通过（导出/导入、路径穿越拦截） |
 | `scripts/smoke-external.js` | 通过（外部文件夹原地注册、禁止复制、删除不碰原目录） |
+| `scripts/smoke-frp.js` | 通过（樱花隧道解析、Bearer 不落日志、start/stop 状态机） |
 | `scripts/smoke-mod.js` | 通过（真实 MOD 搜索、Iris→Sodium 依赖、SHA-1、本地导入） |
 | `scripts/smoke-ui-mods.js` | 通过（真实 Electron 窗口：中文“钠”搜索 + 安装 + 外置登录表单 + 拖拽 URI） |
 | authlib-injector 1.2.8 | 通过（真实下载 + SHA-256 校验） |

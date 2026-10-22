@@ -26,6 +26,7 @@ const allowedProcess = new Set([
   path.join(src, 'core', 'java.js'),
   path.join(src, 'core', 'launch.js'),
   path.join(src, 'core', 'loaders.js'),
+  path.join(src, 'core', 'frp.js'),
 ]);
 
 for (const file of files) {

@@ -81,6 +81,12 @@ contextBridge.exposeInMainWorld('qutc', {
     select: (id) => invoke('accounts:select', { id }),
     remove: (id) => invoke('accounts:remove', { id }),
     refresh: () => invoke('accounts:refresh'),
+    skin: (id) => invoke('accounts:skin', { id }),
+  },
+
+  appearance: {
+    pickBackground: () => invoke('appearance:pick-background'),
+    clearBackground: () => invoke('appearance:clear-background'),
   },
 
   modpack: {
@@ -96,6 +102,17 @@ contextBridge.exposeInMainWorld('qutc', {
     versions: (options) => invoke('mods:versions', options),
     install: (options) => invoke('mods:install', options),
     importLocal: (instanceId) => invoke('mods:import-local', { instanceId }),
+  },
+
+  frp: {
+    status: () => invoke('frp:status'),
+    saveCredentials: (account, accessKey) => invoke('frp:save-credentials', { account, accessKey }),
+    tunnels: () => invoke('frp:tunnels'),
+    start: (tunnelId) => invoke('frp:start', { tunnelId }),
+    stop: () => invoke('frp:stop'),
+    clearCredentials: () => invoke('frp:clear-credentials'),
+    onLog: (cb) => on('frp:log', cb),
+    onState: (cb) => on('frp:state', cb),
   },
 
   game: {

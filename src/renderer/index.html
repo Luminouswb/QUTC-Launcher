@@ -4,13 +4,14 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: qutc-asset:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>QUTC Launcher</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <img id="app-bg" src="qutc-asset://background" alt="" hidden />
     <div id="app" class="app" hidden>
       <aside class="sidebar">
         <div class="brand" title="QUTC Minecraft Club">
@@ -36,6 +37,10 @@
           <button class="nav-item active" data-view="home">
             <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
             <span>主页</span>
+          </button>
+          <button class="nav-item" data-view="directories">
+            <svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+            <span>项目目录</span>
           </button>
           <button class="nav-item" data-view="versions">
             <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16" /></svg>
@@ -97,11 +102,6 @@
                 <button class="btn ghost" id="btn-import">导入实例</button>
               </div>
             </div>
-            <div class="section-head" id="directory-head" hidden>
-              <h3>项目目录</h3>
-              <span class="muted" id="directory-count"></span>
-            </div>
-            <div class="instance-grid" id="directory-grid" hidden></div>
             <div class="section-head">
               <h3>我的实例</h3>
               <span class="muted" id="instance-count">0 个实例</span>
@@ -112,6 +112,19 @@
               <h4>还没有实例</h4>
               <p>创建一个实例，选择 Minecraft 版本与加载器，QUTC 会自动完成下载与校验。</p>
               <button class="btn primary" id="btn-new-instance-2">创建第一个实例</button>
+            </div>
+          </section>
+
+          <section class="view" id="view-directories" hidden>
+            <div class="section-head">
+              <h3>项目目录</h3>
+              <span class="muted" id="directory-count">0 个项目目录</span>
+            </div>
+            <div class="instance-grid" id="directory-grid"></div>
+            <div class="empty" id="directory-empty" hidden>
+              <svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+              <h4>还没有项目目录</h4>
+              <p>在主页点击「添加已有文件夹」，把已有的 Minecraft 目录注册进来，多个版本实例共享同一份 mods / saves / 配置。</p>
             </div>
           </section>
 
@@ -283,6 +296,64 @@
                 <div class="row">
                   <button class="btn ghost small" id="btn-open-data">打开数据目录</button>
                   <button class="btn ghost small" id="btn-open-logs">打开日志目录</button>
+                </div>
+              </div>
+
+              <div class="panel wide">
+                <h3>外观</h3>
+                <label class="field">
+                  <span>主题色</span>
+                  <input type="color" id="set-theme-color" value="#5bf0c8" />
+                  <span class="hint">改变强调色与按钮渐变，默认 #5bf0c8。</span>
+                </label>
+                <label class="field">
+                  <span>背景图</span>
+                  <div class="row">
+                    <button class="btn ghost" id="btn-pick-bg">选择背景图</button>
+                    <button class="btn ghost" id="btn-clear-bg">清除背景</button>
+                    <span class="hint" id="bg-status"></span>
+                  </div>
+                  <span class="hint">支持 PNG / JPG / WebP，文件会保存到数据目录的缓存中。</span>
+                </label>
+              </div>
+
+              <div class="panel wide">
+                <h3>樱花内网穿透（Sakura Frp）</h3>
+                <p class="muted">在启动器内直接开启樱花隧道，无需单独打开樱花客户端。访问密钥用系统安全存储加密后保存在本机，绝不写入明文日志或配置。</p>
+
+                <div id="frp-unconfigured">
+                  <label class="field">
+                    <span>樱花账号 / 邮箱</span>
+                    <input class="input" id="frp-account" maxlength="200" autocomplete="username" placeholder="注册樱花时使用的邮箱或用户名" />
+                  </label>
+                  <label class="field">
+                    <span>访问密钥</span>
+                    <input class="input" id="frp-access-key" type="password" maxlength="512" autocomplete="off" placeholder="在 natfrp.com 用户信息页查看访问密钥" />
+                  </label>
+                  <div class="row">
+                    <button class="btn primary" id="btn-frp-save">保存凭据</button>
+                    <span class="hint" id="frp-hint"></span>
+                  </div>
+                </div>
+
+                <div id="frp-configured" hidden>
+                  <div class="row">
+                    <span class="muted">账号</span>
+                    <strong id="frp-account-label">—</strong>
+                    <button class="btn ghost small" id="btn-frp-refresh">刷新隧道</button>
+                    <button class="btn ghost small" id="btn-frp-clear">清除凭据</button>
+                  </div>
+                  <label class="field">
+                    <span>隧道</span>
+                    <select class="input" id="frp-tunnel"></select>
+                  </label>
+                  <div class="row">
+                    <button class="btn primary" id="btn-frp-start">开启隧道</button>
+                    <button class="btn danger" id="btn-frp-stop">停止</button>
+                    <span class="badge" id="frp-state-badge">未启动</span>
+                  </div>
+                  <div class="hint" id="frp-status"></div>
+                  <div class="task-log" id="frp-log" hidden></div>
                 </div>
               </div>
 

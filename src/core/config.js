@@ -25,7 +25,14 @@ const DEFAULT_CONFIG = Object.freeze({
   installationId: '',
   showSnapshots: false,
   language: 'zh-CN',
+  themeColor: '#5bf0c8',
+  backgroundImage: '',
   acceptedSecurityNotice: false,
+  frp: {
+    account: '',
+    accessKeyEnc: '',
+    lastTunnelId: '',
+  },
 });
 
 let cached = null;
@@ -49,7 +56,18 @@ function normalize(raw) {
   config.customResolution.enabled = Boolean(config.customResolution.enabled);
   config.customResolution.width = clampInt(config.customResolution.width, 320, 7680, 1280);
   config.customResolution.height = clampInt(config.customResolution.height, 240, 4320, 720);
+  if (!/^#[0-9a-f]{6}$/i.test(String(config.themeColor || ''))) config.themeColor = DEFAULT_CONFIG.themeColor;
+  config.backgroundImage = String(config.backgroundImage || '').slice(0, 64);
+  if (!/^background\.(png|jpe?g|webp)$/i.test(config.backgroundImage)) config.backgroundImage = '';
   delete config.msClientId;
+  if (!config.frp || typeof config.frp !== 'object') {
+    config.frp = { ...DEFAULT_CONFIG.frp };
+  } else {
+    config.frp = { ...DEFAULT_CONFIG.frp, ...config.frp };
+  }
+  config.frp.account = String(config.frp.account || '').slice(0, 200);
+  config.frp.accessKeyEnc = String(config.frp.accessKeyEnc || '').slice(0, 4000);
+  config.frp.lastTunnelId = String(config.frp.lastTunnelId || '').slice(0, 40);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(config.installationId || ''))) {
     config.installationId = crypto.randomUUID();
   }

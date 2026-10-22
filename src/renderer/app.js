@@ -14,6 +14,7 @@ const state = {
   installed: new Set(),
   accounts: [],
   selectedAccountId: null,
+  skinCache: {},
   manifest: null,
   manifestAt: 0,
   versionLimit: 200,
@@ -25,16 +26,18 @@ const state = {
   task: null,
   gameRunning: false,
   gameInstanceId: '',
+  frp: null,
   bootstrapped: false,
 };
 
 const VIEW_META = {
   home: ['主页', 'QUTC Minecraft 社团专属启动器'],
+  directories: ['项目目录', '原地注册已有的 Minecraft 目录，多个版本共享同一份资源'],
   versions: ['下载版本', '原版全版本下载，全部校验 Mojang 官方 SHA-1'],
   modpacks: ['整合包', '从 Modrinth 安装或导入本地 .mrpack'],
   mods: ['MOD', '从 Modrinth 下载 MOD 到指定实例，自动处理依赖'],
   accounts: ['账户', '微软正版、authlib-injector 外置登录与离线模式'],
-  settings: ['设置', 'Java、内存、下载源与安全选项'],
+  settings: ['设置', 'Java、内存、下载源、外观与安全选项'],
 };
 
 const LOADER_NAMES = {
@@ -185,10 +188,14 @@ function setView(view) {
   $('view-title').textContent = VIEW_META[view][0];
   $('view-subtitle').textContent = VIEW_META[view][1];
   if (view === 'home') renderInstances();
+  if (view === 'directories') renderDirectories();
   if (view === 'versions') renderVersions();
   if (view === 'mods') renderMods();
   if (view === 'accounts') renderAccounts();
-  if (view === 'settings') fillSettings();
+  if (view === 'settings') {
+    fillSettings();
+    refreshFrp();
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -207,31 +214,35 @@ function directoryName(folder) {
 function renderInstances() {
   const grid = $('instance-grid');
   clear(grid);
-  const list = state.instances;
-  const groups = new Map();
-  const normal = [];
-  for (const instance of list) {
-    if (instance.external && instance.externalPath) {
-      if (!groups.has(instance.externalPath)) groups.set(instance.externalPath, []);
-      groups.get(instance.externalPath).push(instance);
-    } else {
-      normal.push(instance);
-    }
-  }
-
-  const directoryGrid = $('directory-grid');
-  clear(directoryGrid);
-  $('directory-head').hidden = groups.size === 0;
-  directoryGrid.hidden = groups.size === 0;
-  $('directory-count').textContent = `${groups.size} 个项目目录`;
-  for (const [folder, instances] of groups) directoryGrid.appendChild(directoryCard(folder, instances));
-
-  $('instance-count').textContent = `${list.length} 个实例`;
-  $('instance-empty').hidden = list.length > 0;
+  const normal = state.instances.filter((instance) => !(instance.external && instance.externalPath));
+  $('instance-count').textContent = `${state.instances.length} 个实例`;
+  $('instance-empty').hidden = state.instances.length > 0;
   grid.hidden = normal.length === 0;
   for (const instance of normal) grid.appendChild(instanceCard(instance));
   const selected = state.accounts.find((a) => a.selected);
   $('hero-name').textContent = selected ? selected.name : '冒险家';
+}
+
+function directoryGroups() {
+  const groups = new Map();
+  for (const instance of state.instances) {
+    if (instance.external && instance.externalPath) {
+      if (!groups.has(instance.externalPath)) groups.set(instance.externalPath, []);
+      groups.get(instance.externalPath).push(instance);
+    }
+  }
+  return groups;
+}
+
+function renderDirectories() {
+  const grid = $('directory-grid');
+  const empty = $('directory-empty');
+  clear(grid);
+  const groups = directoryGroups();
+  $('directory-count').textContent = `${groups.size} 个项目目录`;
+  grid.hidden = groups.size === 0;
+  empty.hidden = groups.size > 0;
+  for (const [folder, instances] of groups) grid.appendChild(directoryCard(folder, instances));
 }
 
 function directoryCard(folder, instances) {
@@ -269,20 +280,19 @@ function openDirectoryModal(folder, instances) {
     build: (body) => {
       body.appendChild(el('div', 'hint', `这个目录下有 ${instances.length} 个版本实例，共享同一份 mods / saves / 配置。`));
       for (const instance of instances) {
-        const row = el('div', 'account-row');
-        const meta = el('div', 'meta');
-        meta.appendChild(el('strong', '', instance.name));
-        meta.appendChild(el('span', '', `${instance.mcVersion || instance.versionId} · ${loaderLabel(instance.loader)}`));
-        row.appendChild(meta);
-        const launch = el('button', 'btn primary small', '启动');
+        const row = el('div', 'dir-version');
+        const head = el('div', 'dir-version-head');
+        head.appendChild(el('strong', '', instance.name));
+        head.appendChild(el('span', '', `${instance.mcVersion || instance.versionId} · ${loaderLabel(instance.loader)}`));
+        row.appendChild(head);
+        const actions = el('div', 'instance-actions');
+        const launch = el('button', 'btn primary', '开始游戏');
         launch.addEventListener('click', () => launchInstance(instance.id));
-        row.appendChild(launch);
-        const settings = el('button', 'btn ghost small', '设置');
-        settings.addEventListener('click', () => instanceMenu(instance));
-        row.appendChild(settings);
-        const open = el('button', 'btn ghost small', '打开');
-        open.addEventListener('click', () => api.instances.openSubfolder(instance.id, 'instance').catch(showError));
-        row.appendChild(open);
+        actions.appendChild(launch);
+        const manage = el('button', 'btn ghost small', '管理实例');
+        manage.addEventListener('click', () => instanceMenu(instance));
+        actions.appendChild(manage);
+        row.appendChild(actions);
         body.appendChild(row);
       }
     },
@@ -315,17 +325,13 @@ function instanceCard(instance) {
 
   const actions = el('div', 'instance-actions');
   const running = state.gameRunning && state.gameInstanceId === instance.id;
-  const launch = el('button', 'btn primary', running ? '停止游戏' : '启动');
+  const launch = el('button', 'btn primary', running ? '停止游戏' : '开始游戏');
   launch.addEventListener('click', () => (running ? stopGame() : launchInstance(instance.id)));
   actions.appendChild(launch);
 
-  const exportBtn = el('button', 'btn ghost small', '导出');
-  exportBtn.addEventListener('click', () => exportInstance(instance));
-  actions.appendChild(exportBtn);
-
-  const more = el('button', 'btn ghost small', '设置');
-  more.addEventListener('click', () => instanceMenu(instance));
-  actions.appendChild(more);
+  const manage = el('button', 'btn ghost small', '管理实例');
+  manage.addEventListener('click', () => instanceMenu(instance));
+  actions.appendChild(manage);
   card.appendChild(actions);
   return card;
 }
@@ -458,6 +464,14 @@ function instanceMenu(instance) {
           } catch (err) {
             showError(err);
           }
+        },
+      },
+      {
+        label: '导出',
+        kind: 'ghost',
+        onClick: (close) => {
+          close();
+          exportInstance(instance);
         },
       },
       {
@@ -1245,6 +1259,34 @@ async function openModModal(mod) {
 /* 账户                                                                */
 /* ------------------------------------------------------------------ */
 
+function skinUrlOf(account) {
+  return account ? state.skinCache[account.id] || null : null;
+}
+
+function setAvatar(node, account) {
+  clear(node);
+  const url = skinUrlOf(account);
+  const fallback = account ? (account.name || '?').slice(0, 1).toUpperCase() : 'Q';
+  if (url) {
+    const img = el('img', 'avatar-img');
+    img.src = url;
+    img.alt = '';
+    img.addEventListener('error', () => {
+      clear(node);
+      node.textContent = fallback;
+    });
+    node.appendChild(img);
+  } else {
+    node.textContent = fallback;
+  }
+}
+
+function avatarElement(account) {
+  const node = el('div', 'avatar');
+  setAvatar(node, account);
+  return node;
+}
+
 function renderAccounts() {
   const list = $('account-list');
   clear(list);
@@ -1254,7 +1296,7 @@ function renderAccounts() {
   }
   for (const account of state.accounts) {
     const row = el('div', `account-row${account.selected ? ' selected' : ''}`);
-    row.appendChild(el('div', 'avatar', (account.name || '?').slice(0, 1).toUpperCase()));
+    row.appendChild(avatarElement(account));
     const meta = el('div', 'meta');
     meta.appendChild(el('strong', '', account.name));
     meta.appendChild(
@@ -1316,7 +1358,22 @@ function renderAccountChip() {
   const selected = state.accounts.find((a) => a.selected);
   $('account-name').textContent = selected ? selected.name : '未登录';
   $('account-type').textContent = selected ? (selected.type === 'microsoft' ? '微软正版账户' : selected.type === 'yggdrasil' ? `外置登录${selected.authServerName ? ` · ${selected.authServerName}` : ''}` : '离线账户') : '点击添加账户';
-  $('account-avatar').textContent = selected ? selected.name.slice(0, 1).toUpperCase() : 'Q';
+  setAvatar($('account-avatar'), selected);
+}
+
+async function ensureSelectedSkin() {
+  const selected = state.accounts.find((a) => a.selected);
+  if (!selected) return;
+  if (state.skinCache[selected.id] !== undefined) return;
+  state.skinCache[selected.id] = null;
+  try {
+    const result = await api.accounts.skin(selected.id);
+    state.skinCache[selected.id] = (result && result.url) || null;
+  } catch {
+    state.skinCache[selected.id] = null;
+  }
+  renderAccountChip();
+  if (state.view === 'accounts') renderAccounts();
 }
 
 async function addOfflineAccount() {
@@ -1454,6 +1511,48 @@ async function startMsLogin() {
 /* 设置                                                                */
 /* ------------------------------------------------------------------ */
 
+function applyThemeColor(color) {
+  const value = /^#[0-9a-fA-F]{6}$/.test(String(color || '')) ? String(color) : '#5bf0c8';
+  document.documentElement.style.setProperty('--accent', value);
+}
+
+function applyBackground() {
+  const img = $('app-bg');
+  const has = Boolean(state.config && state.config.backgroundImage);
+  img.hidden = !has;
+  if (has) img.src = `qutc-asset://background?v=${Date.now()}`;
+}
+
+function updateBgStatus() {
+  const config = state.config;
+  $('bg-status').textContent = config && config.backgroundImage ? '已设置背景图' : '未设置背景图';
+}
+
+async function pickBackground() {
+  try {
+    const result = await api.appearance.pickBackground();
+    if (!result) return;
+    if (state.config) state.config.backgroundImage = result.backgroundImage;
+    applyBackground();
+    updateBgStatus();
+    toast('背景图已更新', 'ok');
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function clearBackground() {
+  try {
+    await api.appearance.clearBackground();
+    if (state.config) state.config.backgroundImage = '';
+    applyBackground();
+    updateBgStatus();
+    toast('背景图已清除', 'ok');
+  } catch (err) {
+    showError(err);
+  }
+}
+
 function fillSettings() {
   const config = state.config;
   if (!config) return;
@@ -1469,6 +1568,8 @@ function fillSettings() {
   $('set-concurrency').value = String(config.downloadConcurrency);
   $('set-jvm').value = config.jvmArgsExtra || '';
   $('set-gameargs').value = config.gameArgsExtra || '';
+  $('set-theme-color').value = config.themeColor || '#5bf0c8';
+  updateBgStatus();
 }
 
 async function saveSettings() {
@@ -1488,6 +1589,7 @@ async function saveSettings() {
     customResolution: { enabled: $('set-resolution-on').checked, width, height },
     jvmArgsExtra: $('set-jvm').value.trim(),
     gameArgsExtra: $('set-gameargs').value.trim(),
+    themeColor: $('set-theme-color').value,
   };
   try {
     state.config = await api.config.save(patch);
@@ -1510,6 +1612,170 @@ async function detectJava() {
     node.textContent = list.map((j) => `Java ${j.major} (${j.version})`).join(' · ');
   } catch (err) {
     node.textContent = `检测失败：${err.message}`;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 樱花内网穿透                                                        */
+/* ------------------------------------------------------------------ */
+
+const FRP_STATE_LABEL = {
+  idle: '未启动',
+  starting: '启动中…',
+  running: '运行中',
+  error: '出错',
+  stopping: '停止中…',
+};
+
+function frpLog(line) {
+  const log = $('frp-log');
+  log.hidden = false;
+  log.textContent += `${line}\n`;
+  const lines = log.textContent.split('\n');
+  if (lines.length > 400) log.textContent = lines.slice(-300).join('\n');
+  log.scrollTop = log.scrollHeight;
+}
+
+function frpApplyState(snapshot) {
+  if (!snapshot) return;
+  if (!state.frp) state.frp = {};
+  Object.assign(state.frp, snapshot);
+  renderFrpStatus();
+}
+
+function renderFrpStatus() {
+  const data = state.frp || {};
+  const configured = Boolean(data.configured);
+  $('frp-unconfigured').hidden = configured;
+  $('frp-configured').hidden = !configured;
+  const st = data.state || 'idle';
+  const badge = $('frp-state-badge');
+  badge.textContent = FRP_STATE_LABEL[st] || st;
+  badge.className =
+    'badge' +
+    (st === 'running'
+      ? ' installed'
+      : st === 'error'
+        ? ' snapshot'
+        : st === 'starting' || st === 'stopping'
+          ? ' release'
+          : '');
+  const busy = st === 'running' || st === 'starting' || st === 'stopping';
+  const canStop = configured && (st === 'running' || st === 'starting');
+  $('btn-frp-start').disabled = !configured || busy;
+  $('btn-frp-stop').disabled = !canStop;
+  $('btn-frp-refresh').disabled = !configured || busy;
+  $('frp-tunnel').disabled = !configured || busy;
+  if (!configured) return;
+  $('frp-account-label').textContent = data.account || '（未填写账号）';
+  if (st === 'error' && data.error) {
+    $('frp-status').textContent = `错误：${data.error}`;
+  } else if (st === 'running') {
+    $('frp-status').textContent = `隧道已开启（#${data.tunnelId || '?'}），PID ${data.pid || '?'}。`;
+  } else {
+    $('frp-status').textContent = '';
+  }
+}
+
+function renderFrpTunnels(tunnels) {
+  const select = $('frp-tunnel');
+  const previous = select.value;
+  clear(select);
+  if (!tunnels || !tunnels.length) {
+    select.appendChild(new Option('没有可用隧道（请先在 natfrp.com 创建）', ''));
+    return;
+  }
+  for (const t of tunnels) {
+    const label = `#${t.id} ${t.name}${t.type ? ` · ${t.type}` : ''}${t.node ? ` · 节点 ${t.node}` : ''}${t.remote ? ` · ${t.remote}` : ''}`;
+    select.appendChild(new Option(label, String(t.id)));
+  }
+  if (previous && [...select.options].some((o) => o.value === previous)) select.value = previous;
+}
+
+async function refreshFrp() {
+  try {
+    const data = await api.frp.status();
+    state.frp = data;
+    if (Array.isArray(data.logs) && data.logs.length) {
+      $('frp-log').hidden = false;
+      $('frp-log').textContent = `${data.logs.slice(-300).join('\n')}\n`;
+    }
+    renderFrpStatus();
+    if (data.configured) {
+      try {
+        const result = await api.frp.tunnels();
+        renderFrpTunnels(result.tunnels || []);
+        const last = data.lastTunnelId || '';
+        if (last && [...$('frp-tunnel').options].some((o) => o.value === last)) {
+          $('frp-tunnel').value = last;
+        }
+      } catch (err) {
+        renderFrpTunnels([]);
+        frpLog(`获取隧道失败：${err.message}`);
+      }
+    }
+  } catch {
+    /* 面板状态拉取失败不打断页面 */
+  }
+}
+
+async function frpSaveCredentials() {
+  const account = $('frp-account').value.trim();
+  const accessKey = $('frp-access-key').value;
+  if (!account || !accessKey) {
+    showError(new Error('请填写樱花账号和访问密钥'));
+    return;
+  }
+  const btn = $('btn-frp-save');
+  btn.disabled = true;
+  try {
+    await api.frp.saveCredentials(account, accessKey);
+    $('frp-access-key').value = '';
+    toast('樱花凭据已加密保存', 'ok');
+    await refreshFrp();
+  } catch (err) {
+    showError(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function frpClearCredentials() {
+  const ok = await confirmDialog('清除樱花凭据', '确定清除已保存的樱花账号与访问密钥吗？', { okText: '清除', danger: true });
+  if (!ok) return;
+  try {
+    await api.frp.clearCredentials();
+    await refreshFrp();
+    toast('已清除樱花凭据', 'ok');
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function frpStart() {
+  const id = $('frp-tunnel').value;
+  if (!id) {
+    showError(new Error('请选择要开启的隧道'));
+    return;
+  }
+  const btn = $('btn-frp-start');
+  btn.disabled = true;
+  try {
+    await api.frp.start(id);
+    toast('正在开启樱花隧道…', 'ok');
+  } catch (err) {
+    showError(err);
+  } finally {
+    btn.disabled = false;
+    await refreshFrp();
+  }
+}
+
+async function frpStop() {
+  try {
+    await api.frp.stop();
+  } catch (err) {
+    showError(err);
   }
 }
 
@@ -1627,6 +1893,7 @@ async function refreshInstances() {
   try {
     state.instances = await api.instances.list();
     renderInstances();
+    renderDirectories();
     if (state.view === 'mods') renderMods();
   } catch (err) {
     showError(err);
@@ -1650,6 +1917,7 @@ async function refreshAccounts() {
     state.selectedAccountId = data.selectedId;
     renderAccounts();
     renderAccountChip();
+    ensureSelectedSkin();
   } catch (err) {
     showError(err);
   }
@@ -1761,6 +2029,12 @@ function bindStaticEvents() {
     $('memory-label').textContent = `${event.target.value} MB`;
   });
   $('btn-save-settings').addEventListener('click', saveSettings);
+  $('set-theme-color').addEventListener('input', (event) => applyThemeColor(event.target.value));
+  $('btn-pick-bg').addEventListener('click', pickBackground);
+  $('btn-clear-bg').addEventListener('click', clearBackground);
+  $('app-bg').addEventListener('error', () => {
+    $('app-bg').hidden = true;
+  });
   $('btn-java-browse').addEventListener('click', async () => {
     try {
       const file = await api.java.choosePath();
@@ -1773,6 +2047,14 @@ function bindStaticEvents() {
   $('btn-open-data').addEventListener('click', () => api.openDataDir().catch(showError));
   $('btn-open-logs').addEventListener('click', () => api.openLogs().catch(showError));
   $('btn-show-log').addEventListener('click', () => api.openLauncherLog().catch(showError));
+
+  $('btn-frp-save').addEventListener('click', frpSaveCredentials);
+  $('btn-frp-clear').addEventListener('click', frpClearCredentials);
+  $('btn-frp-refresh').addEventListener('click', () => refreshFrp().catch(showError));
+  $('btn-frp-start').addEventListener('click', frpStart);
+  $('btn-frp-stop').addEventListener('click', frpStop);
+  api.frp.onLog((payload) => frpLog(payload && payload.line ? payload.line : ''));
+  api.frp.onState((snapshot) => frpApplyState(snapshot));
 
   $('btn-close-log').addEventListener('click', () => {
     $('log-drawer').hidden = true;
@@ -1848,11 +2130,16 @@ async function init() {
     state.accounts = boot.accounts;
     state.selectedAccountId = boot.selectedAccountId;
     $('app-version').textContent = `v${boot.appVersion}`;
+    applyThemeColor(state.config.themeColor);
+    applyBackground();
     $('app').hidden = false;
     $('loading').hidden = true;
     renderInstances();
+    renderDirectories();
     renderAccountChip();
+    ensureSelectedSkin();
     await refreshGameStatus();
+    refreshFrp();
     if (!boot.config.acceptedSecurityNotice) await showSecurityNotice();
     if (boot.config.showSnapshots) {
       state.versionType = 'all';

@@ -12,7 +12,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, Menu, shell, session } = require('electron');
+const { pathToFileURL } = require('node:url');
+const { app, BrowserWindow, Menu, shell, session, protocol, net } = require('electron');
 
 const Paths = require('../core/paths');
 const Config = require('../core/config');
@@ -22,6 +23,14 @@ const { appendLauncherLog } = require('./log');
 const APP_ID = 'club.qutc.launcher';
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
 const PRELOAD = path.join(__dirname, 'preload.js');
+
+// 本地资源协议（背景图），必须在 app ready 之前注册为特权 scheme
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'qutc-asset',
+    privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false },
+  },
+]);
 
 let mainWindow = null;
 const windows = new Set();
@@ -62,6 +71,7 @@ function boot() {
     appendLauncherLog(`启动器启动，数据目录: ${Paths.getPaths().root}`);
 
     await registerIpc({ app, windows, getMainWindow: () => mainWindow });
+    registerAssetProtocol();
     createWindow();
 
     app.on('activate', () => {
@@ -78,11 +88,16 @@ function hardenSession() {
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   ses.setPermissionCheckHandler(() => false);
-  // 渲染进程不需要发起 API 请求：仅允许本地页面、内联资源与远程图片（封面/头像）
+  // 渲染进程不需要发起 API 请求：仅允许本地页面、内联资源与远程图片（封面/头像/皮肤）
   ses.webRequest.onBeforeRequest((details, callback) => {
     try {
       const url = new URL(details.url);
-      if (url.protocol === 'file:' || url.protocol === 'data:' || url.protocol === 'blob:') {
+      if (
+        url.protocol === 'file:' ||
+        url.protocol === 'data:' ||
+        url.protocol === 'blob:' ||
+        url.protocol === 'qutc-asset:'
+      ) {
         return callback({ cancel: false });
       }
       if (url.protocol === 'https:' && details.resourceType === 'image') {
@@ -91,6 +106,32 @@ function hardenSession() {
       return callback({ cancel: true });
     } catch {
       return callback({ cancel: true });
+    }
+  });
+}
+
+/**
+ * qutc-asset:// 只从 QUTCData/cache 读取背景图，不做任何其它映射。
+ * 文件名来自 Config.backgroundImage（如 background.png），并做白名单校验防穿越。
+ */
+function registerAssetProtocol() {
+  const cacheDir = Paths.getPaths().cache;
+  protocol.handle('qutc-asset', (request) => {
+    try {
+      const url = new URL(request.url);
+      const name = url.hostname || url.pathname.replace(/^\/+/, '').split('/')[0];
+      if (name !== 'background') return new Response('Not Found', { status: 404 });
+      const file = Config.get().backgroundImage;
+      if (!file || !/^background\.(png|jpe?g|webp)$/i.test(file)) {
+        return new Response('Not Found', { status: 404 });
+      }
+      const full = path.resolve(cacheDir, file);
+      if (!full.startsWith(path.resolve(cacheDir) + path.sep)) {
+        return new Response('Not Found', { status: 404 });
+      }
+      return net.fetch(pathToFileURL(full).toString());
+    } catch {
+      return new Response('Not Found', { status: 404 });
     }
   });
 }
