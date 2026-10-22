@@ -552,25 +552,41 @@ function renameInstance(instance) {
 }
 
 async function addExistingFolder(presetFolder) {
-  let folder = typeof presetFolder === 'string' ? presetFolder : '';
-  if (!folder) {
-    try {
-      folder = await api.instances.pickExternalFolder();
-    } catch (err) {
-      showError(err);
-      return;
-    }
-  }
-  if (!folder) return;
-  let versions = [];
+  let scan;
   try {
-    versions = await api.versions.installed();
+    scan =
+      typeof presetFolder === 'string'
+        ? await api.instances.scanExternal(presetFolder)
+        : await api.instances.pickExternalFolder();
   } catch (err) {
     showError(err);
     return;
   }
-  if (!versions.length) {
-    showError(new Error('还没有安装任何版本。请先在「下载版本」安装一个版本，再添加已有文件夹。'));
+  if (!scan) return;
+  const folder = scan.root || scan.folder || '';
+  const detected = Array.isArray(scan.versions) ? scan.versions : [];
+  if (!detected.length) {
+    openModal({
+      title: '未找到游戏版本',
+      subtitle: folder,
+      build: (body) => {
+        body.appendChild(
+          el('div', 'hint', '这个文件夹里没有 versions/<版本>/<版本>.json，无法直接识别 Minecraft 版本。'),
+        );
+        body.appendChild(el('div', 'hint', '可以现在用 QUTC 下载一个游戏版本，然后再把该文件夹添加进来。'));
+      },
+      actions: [
+        { label: '取消', kind: 'ghost', onClick: (close) => close() },
+        {
+          label: '下载游戏版本',
+          kind: 'primary',
+          onClick: (close) => {
+            close();
+            openCreateInstance();
+          },
+        },
+      ],
+    });
     return;
   }
   const baseName = String(folder).split(/[\\/]/).filter(Boolean).pop() || '外部版本';
@@ -578,25 +594,40 @@ async function addExistingFolder(presetFolder) {
   const ui = {};
   openModal({
     title: '添加已有文件夹',
-    subtitle: '原地使用：只注册目录，不复制、不移动原文件。',
+    subtitle: '直接使用文件夹自带的游戏版本，不重新下载版本文件。',
     build: (body) => {
       body.appendChild(el('div', 'hint', `游戏目录：${folder}`));
       const nameField = el('label', 'field');
-      nameField.appendChild(el('span', '', '版本名称'));
+      nameField.appendChild(el('span', '', '版本名称（默认使用 MC 版本号）'));
       const nameInput = el('input', 'input');
-      nameInput.value = sameFolder ? `${baseName} - ${versions[0]}` : baseName;
+      nameInput.value = detected[0].mcVersion || baseName;
       nameInput.maxLength = 48;
+      nameInput.addEventListener('input', () => {
+        nameInput.dataset.touched = '1';
+      });
       nameField.appendChild(nameInput);
       body.appendChild(nameField);
       const versionField = el('label', 'field');
-      versionField.appendChild(el('span', '', '使用已安装的版本 / 加载器'));
+      versionField.appendChild(el('span', '', '文件夹内识别到的版本'));
       const select = el('select', 'input');
-      for (const version of versions) select.appendChild(new Option(version, version));
+      for (const version of detected) {
+        const label = `${version.mcVersion} · ${version.sourceId} · ${loaderLabel(version.loader)}`;
+        select.appendChild(new Option(label, version.id));
+      }
+      select.addEventListener('change', () => {
+        if (!nameInput.dataset.touched) {
+          const selected = detected.find((item) => item.id === select.value);
+          if (selected) nameInput.value = selected.mcVersion || selected.sourceId;
+        }
+      });
       versionField.appendChild(select);
-      versionField.appendChild(el('span', 'hint', 'MOD、存档、配置都从你选择的文件夹读取；版本库和资源仍由 QUTC 管理。'));
+      versionField.appendChild(
+        el('div', 'hint', '启动器会复用该文件夹的 versions / libraries / assets，不联网重新下载版本。'),
+      );
       body.appendChild(versionField);
       body.appendChild(el('div', 'hint', '外部版本删除时只移除注册，不会删除原文件夹。'));
       ui.values = { nameInput, select };
+      if (sameFolder) body.appendChild(el('div', 'hint', '该文件夹已添加过版本；重名会自动提示修改。'));
     },
     actions: [
       { label: '取消', kind: 'ghost', onClick: (close) => close() },

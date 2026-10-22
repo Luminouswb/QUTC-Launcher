@@ -20,6 +20,7 @@ const Instances = require('../core/instances');
 const Modrinth = require('../core/modrinth');
 const Modpack = require('../core/modpack');
 const Mods = require('../core/mods');
+const External = require('../core/external');
 const { AccountStore } = require('../core/auth/accounts');
 const MicrosoftAuth = require('../core/auth/microsoft');
 const YggdrasilAuth = require('../core/auth/yggdrasil');
@@ -477,33 +478,39 @@ async function registerIpc({ windows, getMainWindow }) {
       properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths.length) return null;
-    return result.filePaths[0];
+    return External.scanVersions(result.filePaths[0]);
+  });
+
+  handle('instances:scan-external', async (payload) => {
+    const folder = text(obj(payload).folder, '游戏目录', 1000);
+    return External.scanVersions(folder);
   });
 
   handle('instances:create-external', async (payload) => {
     const opts = obj(payload);
     const name = sanitizeName(text(opts.name, '版本名称', 48), '外部版本');
-    const id = versionId(opts.versionId);
-    if (!fs.existsSync(p.versionJson(id))) throw new Error('该版本尚未安装，请先在「下载版本」安装');
-    const json = await Versions.loadVersionJson(id);
-    const mainClass = String(json.mainClass || '');
-    const lowerId = id.toLowerCase();
-    let loader = { type: 'vanilla', version: '' };
-    if (/quilt/i.test(mainClass) || lowerId.includes('quilt')) loader = { type: 'quilt', version: '' };
-    else if (/fabric/i.test(mainClass) || lowerId.includes('fabric')) loader = { type: 'fabric', version: '' };
-    else if (lowerId.includes('neoforge') || /neoforge/i.test(mainClass)) loader = { type: 'neoforge', version: '' };
-    else if (lowerId.includes('forge') || /bootstraplauncher|forge/i.test(mainClass)) loader = { type: 'forge', version: '' };
-    const mcVersion = String(json.inheritsFrom || json.id || id);
-    const instance = await Instances.createExternalInstance({
-      name,
-      versionId: id,
-      mcVersion,
-      loader,
-      externalGameDir: text(opts.folder, '游戏目录', 1000),
+    const requestedId = versionId(opts.versionId);
+    const folder = text(opts.folder, '游戏目录', 1000);
+    const scan = External.scanVersions(folder);
+    if (!scan.versions.length) throw new Error('未找到游戏版本，请先下载或选择包含 versions 的游戏目录');
+    const selected =
+      scan.versions.find((item) => item.id === requestedId) ||
+      scan.versions.find((item) => item.sourceId === requestedId);
+    if (!selected) throw new Error('选择的版本不在该游戏目录中');
+    return runTask('external', { label: `导入外部版本 ${selected.sourceId}` }, async (ctx) => {
+      if (ctx.onPhase) ctx.onPhase(`导入本地版本文件 ${selected.sourceId}`);
+      const imported = await External.importExternalVersion(selected);
+      const instance = await Instances.createExternalInstance({
+        name,
+        versionId: imported.id,
+        mcVersion: imported.mcVersion,
+        loader: imported.loader,
+        externalGameDir: scan.root || folder,
+      });
+      appendLauncherLog(`[版本] 注册外部目录 ${instance.name} -> ${scan.root || folder}`);
+      send('instances:changed', {});
+      return instance;
     });
-    appendLauncherLog(`[版本] 注册外部目录 ${instance.name} -> ${opts.folder}`);
-    send('instances:changed', {});
-    return instance;
   });
 
   handle('instances:export', async (payload) => {
