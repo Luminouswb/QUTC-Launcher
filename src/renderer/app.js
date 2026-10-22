@@ -518,7 +518,7 @@ function renameInstance(instance) {
 }
 
 async function addExistingFolder(presetFolder) {
-  let folder = presetFolder;
+  let folder = typeof presetFolder === 'string' ? presetFolder : '';
   if (!folder) {
     try {
       folder = await api.instances.pickExternalFolder();
@@ -1929,7 +1929,7 @@ async function refreshAccounts() {
 
 function bindStaticEvents() {
   $('btn-new-instance').addEventListener('click', () => openCreateInstance());
-  $('btn-add-folder').addEventListener('click', addExistingFolder);
+  $('btn-add-folder').addEventListener('click', () => addExistingFolder());
   $('btn-new-instance-2').addEventListener('click', () => openCreateInstance());
   $('btn-import').addEventListener('click', async () => {
     try {
