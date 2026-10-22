@@ -63,7 +63,7 @@ function isVersionCompatible(version, instance) {
 async function searchMods(query, options = {}) {
   const instance = options.instanceId ? await Instances.getInstance(options.instanceId) : null;
   if (instance && (!instance.loader || instance.loader.type === 'vanilla')) {
-    throw new Error('该实例是原版，不能安装 MOD。请选择 Fabric/Quilt/Forge/NeoForge 实例。');
+    throw new Error('该版本是原版，不能安装 MOD。请选择 Fabric/Quilt/Forge/NeoForge 版本。');
   }
   const loader = instance && instance.loader ? instance.loader.type : '';
   const queries = expandModQuery(query);
@@ -98,7 +98,7 @@ async function searchMods(query, options = {}) {
 async function listVersions(projectId, options = {}) {
   const instance = await Instances.getInstance(options.instanceId);
   if (!instance.loader || instance.loader.type === 'vanilla') {
-    throw new Error('该实例是原版，不能安装 MOD');
+    throw new Error('该版本是原版，不能安装 MOD');
   }
   const id = Modrinth.normalizeProjectId(projectId);
   const versions = await Modrinth.getProjectVersions(id, {
@@ -141,12 +141,12 @@ async function installMod(options, ctx = {}) {
   const instance = await Instances.getInstance(options.instanceId);
   const loader = instance.loader && instance.loader.type;
   if (!loader || loader === 'vanilla') {
-    throw new Error('该实例是原版，不能安装 MOD。请选择带加载器的实例。');
+    throw new Error('该版本是原版，不能安装 MOD。请选择带加载器的版本。');
   }
   const rootVersion = await Modrinth.getVersion(String(options.versionId || ''), { abort: ctx.abort });
   if (!isVersionCompatible(rootVersion, instance)) {
     throw new Error(
-      `该 MOD 版本不适配当前实例（需要 ${instance.mcVersion} / ${loader}）`,
+      `该 MOD 版本不适配当前版本（需要 ${instance.mcVersion} / ${loader}）`,
     );
   }
   if (!pickModFile(rootVersion)) throw new Error('该 MOD 版本没有可下载的 .jar 文件');
@@ -266,7 +266,7 @@ async function installMod(options, ctx = {}) {
 async function installLocalJar(instanceId, sourceFile, ctx = {}) {
   const instance = await Instances.getInstance(instanceId);
   if (!instance.loader || instance.loader.type === 'vanilla') {
-    throw new Error('该实例是原版，不能安装 MOD');
+    throw new Error('该版本是原版，不能安装 MOD');
   }
   const source = String(sourceFile || '');
   if (!/\.jar$/i.test(source)) throw new Error('只支持 .jar 文件');

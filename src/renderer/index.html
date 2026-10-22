@@ -97,21 +97,21 @@
                 <p>下载原版全版本、管理社团整合包、正版或离线启动。所有下载均校验官方哈希。</p>
               </div>
               <div class="hero-actions">
-                <button class="btn primary" id="btn-new-instance">新建实例</button>
+                <button class="btn primary" id="btn-new-instance">新建版本</button>
                 <button class="btn ghost" id="btn-add-folder">添加已有文件夹</button>
-                <button class="btn ghost" id="btn-import">导入实例</button>
+                <button class="btn ghost" id="btn-import">导入版本</button>
               </div>
             </div>
             <div class="section-head">
-              <h3>我的实例</h3>
-              <span class="muted" id="instance-count">0 个实例</span>
+              <h3>我的版本</h3>
+              <span class="muted" id="instance-count">0 个版本</span>
             </div>
             <div class="instance-grid" id="instance-grid"></div>
             <div class="empty" id="instance-empty" hidden>
               <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" /></svg>
-              <h4>还没有实例</h4>
-              <p>创建一个实例，选择 Minecraft 版本与加载器，QUTC 会自动完成下载与校验。</p>
-              <button class="btn primary" id="btn-new-instance-2">创建第一个实例</button>
+              <h4>还没有版本</h4>
+              <p>创建一个版本，选择 Minecraft 版本与加载器，QUTC 会自动完成下载与校验。</p>
+              <button class="btn primary" id="btn-new-instance-2">创建第一个版本</button>
             </div>
           </section>
 
@@ -124,7 +124,7 @@
             <div class="empty" id="directory-empty" hidden>
               <svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
               <h4>还没有项目目录</h4>
-              <p>在主页点击「添加已有文件夹」，把已有的 Minecraft 目录注册进来，多个版本实例共享同一份 mods / saves / 配置。</p>
+              <p>在主页点击「添加已有文件夹」，把已有的 Minecraft 目录注册进来，多个版本共享同一份 mods / saves / 配置。</p>
             </div>
           </section>
 
@@ -153,7 +153,7 @@
                 <button class="btn primary" id="btn-pack-search">搜索</button>
                 <button class="btn ghost" id="btn-pack-local">导入本地 .mrpack</button>
               </div>
-              <div class="hint">整合包来自 Modrinth 官方 API；下载文件必须通过 SHA-1/SHA-512 校验才会写入实例。</div>
+              <div class="hint">整合包来自 Modrinth 官方 API；下载文件必须通过 SHA-1/SHA-512 校验才会写入版本。</div>
               <div class="pack-grid" id="pack-grid"></div>
               <div class="empty" id="pack-empty">
                 <h4>搜索整合包</h4>
@@ -165,12 +165,12 @@
           <section class="view" id="view-mods" hidden>
             <div class="panel">
               <div class="toolbar">
-                <select class="input mod-instance" id="mod-instance" title="选择要安装 MOD 的实例"></select>
+                <select class="input mod-instance" id="mod-instance" title="选择要安装 MOD 的版本"></select>
                 <input class="input grow" id="mod-search" type="search" placeholder="搜索 Modrinth MOD，例如 Sodium / JEI / Mod Menu" />
                 <button class="btn primary" id="btn-mod-search">搜索</button>
-                <button class="btn ghost" id="btn-mod-new-instance">新建实例</button>
+                <button class="btn ghost" id="btn-mod-new-instance">新建版本</button>
               </div>
-              <div class="hint" id="mod-hint">选择实例后搜索；只会显示适配该实例版本与加载器的 MOD。</div>
+              <div class="hint" id="mod-hint">选择版本后搜索；只会显示适配该版本与加载器的 MOD。</div>
               <div class="row mod-external">
                 <span class="hint">中文名不够用？到</span>
                 <button class="btn ghost small" id="btn-mod-mcmod">MC百科搜索</button>
@@ -181,7 +181,7 @@
               <div class="pack-grid" id="mod-grid"></div>
               <div class="empty" id="mod-empty">
                 <h4>下载 MOD</h4>
-                <p>先选择一个带加载器的实例，再搜索 Modrinth。安装时会自动下载 required 依赖并校验 SHA-1。</p>
+                <p>先选择一个带加载器的版本，再搜索 Modrinth。安装时会自动下载 required 依赖并校验 SHA-1。</p>
               </div>
             </div>
           </section>
@@ -364,7 +364,7 @@
                   <li>渲染进程无 Node 权限，所有操作走白名单 IPC。</li>
                   <li>原版与资源全部校验 Mojang 官方 SHA-1。</li>
                   <li>Forge/NeoForge 官方安装器需显式同意，并优先校验 SHA-1。</li>
-                  <li>实例压缩包解压前检查路径穿越、符号链接与压缩炸弹。</li>
+                  <li>版本压缩包解压前检查路径穿越、符号链接与压缩炸弹。</li>
                 </ul>
                 <button class="btn ghost small" id="btn-show-log">查看启动器日志</button>
               </div>

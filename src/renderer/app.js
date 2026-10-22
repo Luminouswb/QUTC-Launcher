@@ -35,7 +35,7 @@ const VIEW_META = {
   directories: ['项目目录', '原地注册已有的 Minecraft 目录，多个版本共享同一份资源'],
   versions: ['下载版本', '原版全版本下载，全部校验 Mojang 官方 SHA-1'],
   modpacks: ['整合包', '从 Modrinth 安装或导入本地 .mrpack'],
-  mods: ['MOD', '从 Modrinth 下载 MOD 到指定实例，自动处理依赖'],
+  mods: ['MOD', '从 Modrinth 下载 MOD 到指定版本，自动处理依赖'],
   accounts: ['账户', '微软正版、authlib-injector 外置登录与离线模式'],
   settings: ['设置', 'Java、内存、下载源、外观与安全选项'],
 };
@@ -199,7 +199,7 @@ function setView(view) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 实例                                                                */
+/* 版本                                                                */
 /* ------------------------------------------------------------------ */
 
 function loaderLabel(loader) {
@@ -215,7 +215,7 @@ function renderInstances() {
   const grid = $('instance-grid');
   clear(grid);
   const normal = state.instances.filter((instance) => !(instance.external && instance.externalPath));
-  $('instance-count').textContent = `${state.instances.length} 个实例`;
+  $('instance-count').textContent = `${state.instances.length} 个版本`;
   $('instance-empty').hidden = state.instances.length > 0;
   grid.hidden = normal.length === 0;
   for (const instance of normal) grid.appendChild(instanceCard(instance));
@@ -229,7 +229,7 @@ function directoryGroups() {
   if (managed.length) {
     groups.push({
       key: 'qutc-managed',
-      name: 'QUTC 下载实例',
+      name: 'QUTC 下载版本',
       path: 'QUTCData/instances',
       managed: true,
       instances: managed,
@@ -301,8 +301,8 @@ function openDirectoryModal(group) {
           'div',
           'hint',
           group.managed
-            ? `本启动器下载的 ${group.instances.length} 个版本实例，每个版本有独立游戏目录。`
-            : `这个目录下有 ${group.instances.length} 个版本实例，共享同一份 mods / saves / 配置。`,
+            ? `本启动器下载的 ${group.instances.length} 个版本，每个版本有独立游戏目录。`
+            : `这个目录下有 ${group.instances.length} 个版本，共享同一份 mods / saves / 配置。`,
         ),
       );
       for (const instance of group.instances) {
@@ -315,7 +315,7 @@ function openDirectoryModal(group) {
         const launch = el('button', 'btn primary', '开始游戏');
         launch.addEventListener('click', () => launchInstance(instance.id));
         actions.appendChild(launch);
-        const manage = el('button', 'btn ghost small', '管理实例');
+        const manage = el('button', 'btn ghost small', '管理版本');
         manage.addEventListener('click', () => instanceMenu(instance));
         actions.appendChild(manage);
         row.appendChild(actions);
@@ -363,7 +363,7 @@ function instanceCard(instance) {
   launch.addEventListener('click', () => (running ? stopGame() : launchInstance(instance.id)));
   actions.appendChild(launch);
 
-  const manage = el('button', 'btn ghost small', '管理实例');
+  const manage = el('button', 'btn ghost small', '管理版本');
   manage.addEventListener('click', () => instanceMenu(instance));
   actions.appendChild(manage);
   card.appendChild(actions);
@@ -374,7 +374,7 @@ function instanceMenu(instance) {
   const ui = {};
   openModal({
     title: instance.name,
-    subtitle: `${instance.versionId} · ${loaderLabel(instance.loader)}${instance.modpack ? ' · 整合包实例' : ''}`,
+    subtitle: `${instance.versionId} · ${loaderLabel(instance.loader)}${instance.modpack ? ' · 整合包版本' : ''}`,
     wide: true,
     build: (body) => {
       body.appendChild(
@@ -388,7 +388,7 @@ function instanceMenu(instance) {
       );
 
       const nameField = el('label', 'field');
-      nameField.appendChild(el('span', '', '实例名称'));
+      nameField.appendChild(el('span', '', '版本名称'));
       const nameInput = el('input', 'input');
       nameInput.value = instance.name;
       nameInput.maxLength = 48;
@@ -396,7 +396,7 @@ function instanceMenu(instance) {
       body.appendChild(nameField);
 
       const memField = el('label', 'field');
-      memField.appendChild(el('span', '', '本实例内存（MB，0 表示使用全局设置）'));
+      memField.appendChild(el('span', '', '本版本内存（MB，0 表示使用全局设置）'));
       const memInput = el('input', 'input');
       memInput.type = 'number';
       memInput.min = '0';
@@ -407,7 +407,7 @@ function instanceMenu(instance) {
       body.appendChild(memField);
 
       const resField = el('label', 'field');
-      resField.appendChild(el('span', '', '本实例分辨率'));
+      resField.appendChild(el('span', '', '本版本分辨率'));
       const resRow = el('div', 'row');
       const resEnabled = el('input');
       resEnabled.type = 'checkbox';
@@ -433,7 +433,7 @@ function instanceMenu(instance) {
       body.appendChild(resField);
 
       const jvmField = el('label', 'field');
-      jvmField.appendChild(el('span', '', '本实例额外 JVM 参数'));
+      jvmField.appendChild(el('span', '', '本版本额外 JVM 参数'));
       const jvmInput = el('input', 'input');
       jvmInput.value = instance.jvmArgsExtra || '';
       jvmInput.placeholder = '例如 -Dfml.ignoreInvalidMinecraftCertificates=true';
@@ -441,7 +441,7 @@ function instanceMenu(instance) {
       body.appendChild(jvmField);
 
       const gameField = el('label', 'field');
-      gameField.appendChild(el('span', '', '本实例额外游戏参数'));
+      gameField.appendChild(el('span', '', '本版本额外游戏参数'));
       const gameInput = el('input', 'input');
       gameInput.value = instance.gameArgsExtra || '';
       gameInput.placeholder = '例如 --fullscreen';
@@ -463,14 +463,14 @@ function instanceMenu(instance) {
         ['saves', '存档文件夹'],
         ['resourcepacks', '资源包文件夹'],
         ['mods', 'MOD 文件夹'],
-        ['instance', '实例目录'],
+        ['instance', '版本目录'],
       ]) {
         const btn = el('button', 'btn ghost small', label);
         btn.addEventListener('click', () => api.instances.openSubfolder(instance.id, kind).catch(showError));
         shortcuts.appendChild(btn);
       }
       body.appendChild(shortcuts);
-      body.appendChild(el('div', 'hint', '外部实例的版本文件夹是 QUTC 管理的版本目录；存档/资源包/MOD 会打开外部原目录。'));
+      body.appendChild(el('div', 'hint', '外部版本的版本文件夹是 QUTC 管理的版本目录；存档/资源包/MOD 会打开外部原目录。'));
       ui.values = { nameInput, memInput, resEnabled, widthInput, heightInput, jvmInput, gameInput, notesInput };
     },
     actions: [
@@ -494,7 +494,7 @@ function instanceMenu(instance) {
             });
             close();
             await refreshInstances();
-            toast('实例设置已保存', 'ok');
+            toast('版本设置已保存', 'ok');
           } catch (err) {
             showError(err);
           }
@@ -524,7 +524,7 @@ function instanceMenu(instance) {
 function renameInstance(instance) {
   const ui = {};
   openModal({
-    title: '重命名实例',
+    title: '重命名版本',
     build: (body) => {
       const input = el('input', 'input');
       input.style.width = '100%';
@@ -573,7 +573,7 @@ async function addExistingFolder(presetFolder) {
     showError(new Error('还没有安装任何版本。请先在「下载版本」安装一个版本，再添加已有文件夹。'));
     return;
   }
-  const baseName = String(folder).split(/[\\/]/).filter(Boolean).pop() || '外部实例';
+  const baseName = String(folder).split(/[\\/]/).filter(Boolean).pop() || '外部版本';
   const sameFolder = state.instances.filter((item) => item.externalPath === folder).length;
   const ui = {};
   openModal({
@@ -582,7 +582,7 @@ async function addExistingFolder(presetFolder) {
     build: (body) => {
       body.appendChild(el('div', 'hint', `游戏目录：${folder}`));
       const nameField = el('label', 'field');
-      nameField.appendChild(el('span', '', '实例名称'));
+      nameField.appendChild(el('span', '', '版本名称'));
       const nameInput = el('input', 'input');
       nameInput.value = sameFolder ? `${baseName} - ${versions[0]}` : baseName;
       nameInput.maxLength = 48;
@@ -595,7 +595,7 @@ async function addExistingFolder(presetFolder) {
       versionField.appendChild(select);
       versionField.appendChild(el('span', 'hint', 'MOD、存档、配置都从你选择的文件夹读取；版本库和资源仍由 QUTC 管理。'));
       body.appendChild(versionField);
-      body.appendChild(el('div', 'hint', '外部实例删除时只移除注册，不会删除原文件夹。'));
+      body.appendChild(el('div', 'hint', '外部版本删除时只移除注册，不会删除原文件夹。'));
       ui.values = { nameInput, select };
     },
     actions: [
@@ -605,15 +605,20 @@ async function addExistingFolder(presetFolder) {
         kind: 'primary',
         onClick: async (close) => {
           const v = ui.values;
+          const name = v.nameInput.value.trim() || baseName;
+          const duplicate = state.instances.some(
+            (item) => item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+          );
+          if (duplicate) throw new Error(`版本名称「${name}」已存在，请修改名称`);
           try {
             await api.instances.createExternal({
-              name: v.nameInput.value.trim() || baseName,
+              name,
               folder,
               versionId: v.select.value,
             });
             close();
             await refreshInstances();
-            toast('已添加外部文件夹实例', 'ok');
+            toast('已添加外部文件夹版本', 'ok');
           } catch (err) {
             showError(err);
           }
@@ -627,7 +632,7 @@ async function duplicateInstance(instance) {
   try {
     await api.instances.duplicate(instance.id, `${instance.name} 副本`);
     await refreshInstances();
-    toast('实例已复制', 'ok');
+    toast('版本已复制', 'ok');
   } catch (err) {
     showError(err);
   }
@@ -637,7 +642,7 @@ async function deleteInstance(instance) {
   const message = instance.external
     ? `确定移除「${instance.name}」的外部目录注册吗？只删除 QUTC 的注册信息，不会删除原文件夹。`
     : `确定删除「${instance.name}」吗？文件会移入回收目录，不会立即永久删除。`;
-  const ok = await confirmDialog('删除实例', message, {
+  const ok = await confirmDialog('删除版本', message, {
     okText: '删除',
     danger: true,
   });
@@ -645,7 +650,7 @@ async function deleteInstance(instance) {
   try {
     await api.instances.remove(instance.id);
     await refreshInstances();
-    toast('实例已删除', 'ok');
+    toast('版本已删除', 'ok');
   } catch (err) {
     showError(err);
   }
@@ -685,7 +690,7 @@ async function stopGame() {
 }
 
 /* ------------------------------------------------------------------ */
-/* 创建实例                                                            */
+/* 创建版本                                                            */
 /* ------------------------------------------------------------------ */
 
 async function ensureManifest(force = false) {
@@ -707,13 +712,14 @@ async function openCreateInstance(presetVersion) {
   const versions = manifest.versions;
   const ui = {};
   openModal({
-    title: '新建实例',
+    title: '新建版本',
     subtitle: '选择 Minecraft 版本；需要模组时可同时安装加载器。安装过程会逐文件校验官方哈希。',
     build: (body) => {
       const nameField = el('label', 'field');
-      nameField.appendChild(el('span', '', '实例名称'));
+      nameField.appendChild(el('span', '', '版本名称（留空则使用 MC 版本号）'));
       const nameInput = el('input', 'input');
-      nameInput.value = '新实例';
+      nameInput.value = '';
+      nameInput.placeholder = '例如 1.12.2 / 生存服';
       nameInput.maxLength = 48;
       nameField.appendChild(nameInput);
       body.appendChild(nameField);
@@ -732,6 +738,10 @@ async function openCreateInstance(presetVersion) {
       for (const v of others.slice(0, 80)) groupOther.appendChild(new Option(v.id, v.id));
       versionSelect.appendChild(groupOther);
       if (presetVersion) versionSelect.value = presetVersion;
+      nameInput.value = presetVersion || versionSelect.value;
+      nameInput.addEventListener('input', () => {
+        nameInput.dataset.touched = '1';
+      });
       versionField.appendChild(versionSelect);
       body.appendChild(versionField);
 
@@ -805,7 +815,10 @@ async function openCreateInstance(presetVersion) {
       };
 
       loaderSelect.addEventListener('change', loadLoaderVersions);
-      versionSelect.addEventListener('change', loadLoaderVersions);
+      versionSelect.addEventListener('change', () => {
+        if (!nameInput.dataset.touched) nameInput.value = versionSelect.value;
+        loadLoaderVersions();
+      });
       loadLoaderVersions();
     },
     actions: [
@@ -815,15 +828,18 @@ async function openCreateInstance(presetVersion) {
         kind: 'primary',
         onClick: async (close) => {
           const v = ui.values;
-          const name = v.nameInput.value.trim();
-          if (!name) throw new Error('请输入实例名称');
+          const name = v.nameInput.value.trim() || v.versionSelect.value;
+          if (!name) throw new Error('请输入版本名称');
+          const duplicate = state.instances.some(
+            (item) => item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+          );
+          if (duplicate) throw new Error(`版本名称「${name}」已存在，请修改名称`);
           const loader = v.loaderSelect.value;
           const loaderVersion = v.loaderVersionInput.value.trim();
           if (loader !== 'vanilla' && !loaderVersion) throw new Error('请选择加载器版本');
           if ((loader === 'forge' || loader === 'neoforge') && !v.consent.checked) {
             throw new Error('安装 Forge/NeoForge 需要先勾选同意运行官方安装器');
           }
-          close();
           try {
             await api.instances.create({
               name,
@@ -832,9 +848,10 @@ async function openCreateInstance(presetVersion) {
               loaderVersion,
               consent: v.consent.checked,
             });
+            close();
             await refreshInstances();
             await refreshInstalled();
-            toast('实例创建完成', 'ok');
+            toast('版本创建完成', 'ok');
           } catch (err) {
             showError(err);
           }
@@ -1103,18 +1120,18 @@ function updateModHint() {
   const button = $('btn-mod-search');
   const input = $('mod-search');
   if (!instance) {
-    hint.textContent = '还没有实例。请先在「主页」创建实例，再下载 MOD。';
+    hint.textContent = '还没有版本。请先在「主页」创建版本，再下载 MOD。';
     button.disabled = true;
     input.disabled = true;
     return;
   }
   if (!modInstanceUsable(instance)) {
-    hint.textContent = `「${instance.name}」是原版实例，不能安装 MOD。请选择 Fabric/Quilt/Forge/NeoForge 实例。`;
+    hint.textContent = `「${instance.name}」是原版版本，不能安装 MOD。请选择 Fabric/Quilt/Forge/NeoForge 版本。`;
     button.disabled = true;
     input.disabled = true;
     return;
   }
-  hint.textContent = `目标：${instance.name} · MC ${instance.mcVersion} · ${loaderLabel(instance.loader)}${instance.loader.version ? ` ${instance.loader.version}` : ''}。只显示适配该实例的 MOD。`;
+  hint.textContent = `目标：${instance.name} · MC ${instance.mcVersion} · ${loaderLabel(instance.loader)}${instance.loader.version ? ` ${instance.loader.version}` : ''}。只显示适配该版本的 MOD。`;
   button.disabled = false;
   input.disabled = false;
 }
@@ -1132,7 +1149,7 @@ function renderMods() {
 
   if (!state.instances.length) {
     select.disabled = true;
-    select.appendChild(new Option('暂无实例', ''));
+    select.appendChild(new Option('暂无版本', ''));
     state.modInstanceId = '';
     updateModHint();
     return;
@@ -1155,11 +1172,11 @@ function renderMods() {
 async function searchMods() {
   const instance = selectedModInstance();
   if (!instance) {
-    showError(new Error('请先选择实例'));
+    showError(new Error('请先选择版本'));
     return;
   }
   if (!modInstanceUsable(instance)) {
-    showError(new Error('原版实例不能安装 MOD'));
+    showError(new Error('原版版本不能安装 MOD'));
     return;
   }
   const query = $('mod-search').value.trim();
@@ -1223,7 +1240,7 @@ function modCard(mod) {
 async function openModModal(mod) {
   const instance = selectedModInstance();
   if (!instance) {
-    showError(new Error('请先选择实例'));
+    showError(new Error('请先选择版本'));
     return;
   }
   let versions;
@@ -1240,7 +1257,7 @@ async function openModModal(mod) {
   const ui = {};
   openModal({
     title: `安装 ${mod.title}`,
-    subtitle: `目标实例：${instance.name} · MC ${instance.mcVersion} · ${loaderLabel(instance.loader)}`,
+    subtitle: `目标版本：${instance.name} · MC ${instance.mcVersion} · ${loaderLabel(instance.loader)}`,
     build: (body) => {
       const field = el('label', 'field');
       field.appendChild(el('span', '', 'MOD 版本'));
@@ -1258,7 +1275,7 @@ async function openModModal(mod) {
       checkLabel.appendChild(check);
       checkLabel.appendChild(el('span', '', '自动下载 required 依赖（推荐）'));
       body.appendChild(checkLabel);
-      body.appendChild(el('div', 'hint', '文件会下载到实例的 mods/ 目录，并校验 Modrinth 提供的 SHA-1。'));
+      body.appendChild(el('div', 'hint', '文件会下载到版本的 mods/ 目录，并校验 Modrinth 提供的 SHA-1。'));
       ui.values = { select, check };
     },
     actions: [
@@ -1970,7 +1987,7 @@ function bindStaticEvents() {
       const result = await api.instances.import();
       if (result) {
         await refreshInstances();
-        toast('实例导入完成', 'ok');
+        toast('版本导入完成', 'ok');
       }
     } catch (err) {
       showError(err);
@@ -2008,7 +2025,7 @@ function bindStaticEvents() {
   $('btn-mod-local').addEventListener('click', async () => {
     const instance = selectedModInstance();
     if (!instance || !modInstanceUsable(instance)) {
-      showError(new Error('请先选择一个带加载器的实例'));
+      showError(new Error('请先选择一个带加载器的版本'));
       return;
     }
     try {
@@ -2111,7 +2128,7 @@ function showSecurityNotice() {
           '启动器不收集任何账号密码；微软登录使用设备码，外置登录密码只发送给所选验证服务器且不保存。',
           '原版游戏、资源、Java 运行时均来自 Mojang 官方并校验 SHA-1。',
           'Forge/NeoForge 安装需要运行官方安装器，必须由你勾选同意。',
-          '实例导入会检查路径穿越、符号链接和压缩炸弹，包内脚本不会执行。',
+          '版本导入会检查路径穿越、符号链接和压缩炸弹，包内脚本不会执行。',
           '离线模式仅用于社团内部服务器，请勿用于盗版公共服务器。',
         ]) {
           list.appendChild(el('li', '', text));

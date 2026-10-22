@@ -9,7 +9,7 @@
 3. **最小权限**。渲染进程运行在 Electron sandbox 中，没有 Node/文件系统/网络权限；所有能力通过 `preload.js` 暴露的固定 IPC 方法调用。
 4. **不信任压缩包**。`.qutc` 与 `.mrpack` 都是 ZIP，解压前检查路径穿越、绝对路径、符号链接、加密条目、压缩炸弹；包内脚本不会被执行。
 5. **不收集数据**。没有遥测、统计、广告、自动更新请求；账号令牌只保存在本机。
-6. **MOD 是第三方游戏代码**。MOD 文件只写入实例的 `mods/`，文件名会清理路径字符，SHA-1 只证明文件与 Modrinth 登记一致，不代表 MOD 行为安全；请只安装社团信任的 MOD，启动器不会执行 MOD 安装脚本。
+6. **MOD 是第三方游戏代码**。MOD 文件只写入版本的 `mods/`，文件名会清理路径字符，SHA-1 只证明文件与 Modrinth 登记一致，不代表 MOD 行为安全；请只安装社团信任的 MOD，启动器不会执行 MOD 安装脚本。
 7. **引导器透明**。便携版的 `QUTC Launcher.exe` 由 `node scripts/setup.js` 从 `build/launcher-bootstrap.cs` 编译，仓库不提交这个 exe。它只启动同目录下的 Electron 运行时；不联网、不下载、不写注册表。
 
 ## 2. 代码来源与“借鉴”审查
@@ -54,11 +54,11 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 | 下载被篡改 | 下载到 `.part`，校验 SHA-1/SHA-256 后原子替换；已有文件重新校验 | `src/core/http.js`、`src/core/hash.js` |
 | 镜像投毒 | 镜像只改变主机名，哈希仍以 Mojang 官方 JSON 为准；镜像失败回退官方 | `src/core/http.js` |
 | 版本 JSON 注入 | 只读取固定字段；库地址必须是 HTTPS；加载器 profile 校验 `inheritsFrom`/`mainClass` | `src/core/versions.js`、`src/core/loaders.js` |
-| 路径穿越 | 所有 ZIP 条目、实例相对路径使用 `assertSafeRelative` + `safeJoin` | `src/core/util.js`、`src/core/zip.js` |
+| 路径穿越 | 所有 ZIP 条目、版本相对路径使用 `assertSafeRelative` + `safeJoin` | `src/core/util.js`、`src/core/zip.js` |
 | 符号链接 / 压缩炸弹 | 拒绝 symlink、加密 ZIP、不支持算法；限制条目数、总解压体积、单文件压缩比 | `src/core/zip.js` |
 | 渲染进程 XSS → RCE | sandbox、contextIsolation、无 nodeIntegration、CSP、无 `innerHTML` 写入远程数据 | `src/main/main.js`、`src/renderer/index.html`、`src/renderer/app.js` |
 | 任意 IPC 调用 | preload 只暴露固定方法；主进程逐参数校验（类型、长度、版本 ID 正则） | `src/main/preload.js`、`src/main/ipc.js` |
-| 任意文件读写 | 文件路径只来自主进程 `dialog`；版本/实例 ID 正则限制；导出/导入不接收渲染进程路径 | `src/main/ipc.js`、`src/core/instances.js` |
+| 任意文件读写 | 文件路径只来自主进程 `dialog`；版本/版本 ID 正则限制；导出/导入不接收渲染进程路径 | `src/main/ipc.js`、`src/core/instances.js` |
 | 令牌泄露 | `refresh_token` 用 `safeStorage`（Windows DPAPI）加密；渲染进程拿不到令牌；日志不打印 access token | `src/core/auth/accounts.js`、`src/main/ipc.js` |
 | 外链钓鱼 | `shell.openExternal` 只允许白名单域名（微软、Mojang、Modrinth、Fabric 等） | `src/core/security.js`、`src/main/main.js` |
 | 第三方安装器 | 必须显式同意；优先校验官方 `.sha1`；运行目录限制在 QUTCData；日志公开 | `src/core/loaders.js` |
@@ -87,7 +87,7 @@ rg -n "atob\(|Buffer\.from\([^,]+,\s*['\"]base64" src
 7. **第三方 Yggdrasil 服务器是外部账号服务**。启动器只负责把密码通过 HTTPS 发送到用户填写的地址，本地不保存密码；但账号安全、角色数据、服务可用性由该服务器负责。只应使用社团信任的验证服务器，并建议开启其二次验证。外置登录不能进入正版服务器。
 8. **MINEBBS / MC百科不做抓取**。两者没有公开稳定的 MOD 下载 API，启动器只提供搜索外链；从这些站点下载的 jar 由用户通过「导入本地 MOD」加入，启动器无法审计其内容。
 9. **authlib-injector 是第三方 javaagent**。启动器从官方地址下载并校验 SHA-256，但它会修改游戏网络鉴权行为；如社团要求零第三方 agent，可只使用微软/离线登录。
-10. **外部文件夹实例拥有原目录写权限**。添加后启动器会在该目录读写 `mods`、`config`、`saves`；删除实例只移除注册，不删除原目录。路径来自主进程文件夹选择框并做绝对路径/真实路径校验，但仍应只选择信任的游戏目录，不要指向系统目录或重要资料目录。
+10. **外部文件夹版本拥有原目录写权限**。添加后启动器会在该目录读写 `mods`、`config`、`saves`；删除版本只移除注册，不删除原目录。路径来自主进程文件夹选择框并做绝对路径/真实路径校验，但仍应只选择信任的游戏目录，不要指向系统目录或重要资料目录。
 11. **樱花内网穿透是第三方隧道服务**。启动器会下载并运行 Sakura Frp 的 frpc 二进制、以访问密钥连接其 API 与服务器。访问密钥用系统加密保存、经环境变量传入、不落日志；但 frpc 与 Sakura Frp 服务本身属于第三方黑盒，实际连通性需真实账号验证。建议社团对穿透流量做审计。
 
 ## 6. 审查清单（建议逐项勾选）

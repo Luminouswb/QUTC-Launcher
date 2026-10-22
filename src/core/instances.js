@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * QUTC Launcher - 实例（游戏配置）管理
+ * QUTC Launcher - 版本（游戏配置）管理
  *
- * 每个实例拥有独立的 minecraft 目录（mods/config/saves 等），
+ * 每个版本拥有独立的 minecraft 目录（mods/config/saves 等），
  * 通过 .qutc 压缩包导入/导出。
  */
 
@@ -54,13 +54,13 @@ const EXPORT_EXCLUDES = [
 ];
 
 function assertInstanceId(id) {
-  if (!INSTANCE_ID_RE.test(String(id || ''))) throw new Error('实例 ID 非法');
+  if (!INSTANCE_ID_RE.test(String(id || ''))) throw new Error('版本 ID 非法');
   return id;
 }
 
 function instanceDir(id) {
   const dir = Paths.getPaths().instanceDir(assertInstanceId(id));
-  if (!isInside(Paths.getPaths().instances, dir)) throw new Error('实例路径越界');
+  if (!isInside(Paths.getPaths().instances, dir)) throw new Error('版本路径越界');
   return dir;
 }
 
@@ -114,7 +114,7 @@ function publicInstance(data) {
   };
 }
 
-/** 实例实际使用的游戏目录：外部实例直接使用用户选择的原目录 */
+/** 版本实际使用的游戏目录：外部版本直接使用用户选择的原目录 */
 function gameDirForInstance(data) {
   if (data && data.externalGameDir) return path.resolve(String(data.externalGameDir));
   return Paths.getPaths().instanceGameDir(assertInstanceId(data && data.id));
@@ -126,17 +126,27 @@ async function getGameDir(id) {
 
 async function getInstance(id) {
   const data = await readJson(Paths.getPaths().instanceFile(assertInstanceId(id)), null);
-  if (!data) throw new Error('实例不存在');
+  if (!data) throw new Error('版本不存在');
   return data;
 }
 
+async function assertUniqueName(name, exceptId = '') {
+  const target = String(name || '').trim().toLocaleLowerCase();
+  if (!target) throw new Error('版本名称不能为空');
+  const items = await listInstances();
+  if (items.some((item) => item.id !== exceptId && String(item.name).trim().toLocaleLowerCase() === target)) {
+    throw new Error(`版本名称「${name}」已存在，请修改名称`);
+  }
+}
+
 /**
- * 创建实例
+ * 创建版本
  * @param {{name:string, versionId:string, mcVersion?:string,
  *          loader?:{type:string,version:string}, modpack?:object, memoryMb?:number}} options
  */
 async function createInstance(options) {
-  const name = sanitizeName(options.name || '新实例');
+  const name = sanitizeName(options.name || options.mcVersion || options.versionId || '新版本');
+  await assertUniqueName(name);
   const versionId = assertVersionId(options.versionId);
   const id = `i${Date.now().toString(36)}${randomId(3)}`;
   await ensureInstanceDirs(id);
@@ -161,11 +171,12 @@ async function createInstance(options) {
 }
 
 /**
- * 原地注册一个已有游戏目录：只写实例元数据，不复制/移动用户文件。
+ * 原地注册一个已有游戏目录：只写版本元数据，不复制/移动用户文件。
  * @param {{name:string, versionId:string, mcVersion?:string, loader?:object, externalGameDir:string}} options
  */
 async function createExternalInstance(options) {
-  const name = sanitizeName(options.name || '外部实例');
+  const name = sanitizeName(options.name || options.mcVersion || '外部版本');
+  await assertUniqueName(name);
   const versionId = assertVersionId(options.versionId);
   const raw = String(options.externalGameDir || '').trim();
   if (!raw || !path.isAbsolute(raw)) throw new Error('外部游戏目录必须是绝对路径');
@@ -178,7 +189,7 @@ async function createExternalInstance(options) {
   const stat = await fsp.stat(real);
   if (!stat.isDirectory()) throw new Error('选择的路径不是文件夹');
   if (isInside(Paths.getPaths().root, real)) {
-    throw new Error('不能把 QUTC 数据目录内部注册为外部实例');
+    throw new Error('不能把 QUTC 数据目录内部注册为外部版本');
   }
   const id = `i${Date.now().toString(36)}${randomId(3)}`;
   const dir = instanceDir(id);
@@ -206,11 +217,15 @@ async function createExternalInstance(options) {
 
 async function updateInstance(id, patch) {
   const data = await getInstance(id);
+  const previousName = data.name;
   const allowed = ['name', 'memoryMb', 'notes', 'icon', 'jvmArgsExtra', 'gameArgsExtra', 'customResolution'];
   for (const key of allowed) {
     if (patch[key] !== undefined) data[key] = patch[key];
   }
-  if (data.name !== undefined) data.name = sanitizeName(data.name, '实例');
+  if (data.name !== undefined) {
+    data.name = sanitizeName(data.name, '版本');
+    if (data.name !== previousName) await assertUniqueName(data.name, id);
+  }
   if (data.memoryMb !== undefined) data.memoryMb = Math.max(0, Math.min(65536, Number(data.memoryMb) || 0));
   if (data.notes !== undefined) data.notes = String(data.notes).slice(0, 500);
   if (data.jvmArgsExtra !== undefined) data.jvmArgsExtra = String(data.jvmArgsExtra).slice(0, 2000);
@@ -231,10 +246,35 @@ async function renameInstance(id, name) {
   return updateInstance(id, { name });
 }
 
+/** 把历史遗留的“新版本”/重名版本改成可区分的名称 */
+async function normalizeInstanceNames() {
+  const items = await listInstances();
+  const used = new Set();
+  for (const item of items) {
+    const data = await getInstance(item.id);
+    let base = String(data.name || '').trim();
+    if (!base || /^(新实例|新版本|实例|版本)(\s*\(\d+\))?$/.test(base)) {
+      base = String(data.mcVersion || data.versionId || '版本');
+    }
+    base = sanitizeName(base, '版本');
+    let name = base;
+    let index = 2;
+    while (used.has(name.toLocaleLowerCase())) {
+      name = `${base} (${index})`;
+      index += 1;
+    }
+    used.add(name.toLocaleLowerCase());
+    if (data.name !== name) {
+      data.name = name;
+      await writeJsonAtomic(Paths.getPaths().instanceFile(data.id), data);
+    }
+  }
+}
+
 async function deleteInstance(id) {
   const data = await getInstance(id);
   if (data.externalGameDir) {
-    // 外部实例只删除 QUTC 自己的元数据，绝不动用户选择的原目录
+    // 外部版本只删除 QUTC 自己的元数据，绝不动用户选择的原目录
     await fsp.rm(instanceDir(id), { recursive: true, force: true });
     return true;
   }
@@ -251,7 +291,7 @@ async function deleteInstance(id) {
 
 async function duplicateInstance(id, newName) {
   const source = await getInstance(id);
-  if (source.externalGameDir) throw new Error('外部文件夹实例不支持复制，请重新添加目录');
+  if (source.externalGameDir) throw new Error('外部文件夹版本不支持复制，请重新添加目录');
   const created = await createInstance({
     name: uniqueName(newName || `${source.name} 副本`, (await listInstances()).map((i) => i.name)),
     versionId: source.versionId,
@@ -282,7 +322,7 @@ async function updateLastPlayed(id, durationMs = 0) {
 }
 
 /**
- * 导出实例为 .qutc 压缩包
+ * 导出版本为 .qutc 压缩包
  */
 async function exportInstance(id, destFile, { onProgress, abort } = {}) {
   const data = await getInstance(id);
@@ -338,12 +378,12 @@ async function exportInstance(id, destFile, { onProgress, abort } = {}) {
 }
 
 /**
- * 导入 .qutc 实例包（也接受普通包含 instance.json 的压缩包）
+ * 导入 .qutc 版本包（也接受普通包含 instance.json 的压缩包）
  */
 async function importInstance(zipFile, { onProgress, abort } = {}) {
   const entries = await listZip(zipFile);
   const manifestEntry = entries.find((e) => e.name === 'instance.json');
-  if (!manifestEntry) throw new Error('压缩包缺少 instance.json，不是 QUTC 实例包');
+  if (!manifestEntry) throw new Error('压缩包缺少 instance.json，不是 QUTC 版本包');
   const raw = await readZipEntry(zipFile, 'instance.json');
   let manifest;
   try {
@@ -352,10 +392,10 @@ async function importInstance(zipFile, { onProgress, abort } = {}) {
     throw new Error('instance.json 解析失败');
   }
   const meta = manifest && manifest.instance ? manifest.instance : manifest;
-  if (!meta || !meta.versionId) throw new Error('实例包缺少版本信息');
+  if (!meta || !meta.versionId) throw new Error('版本包缺少版本信息');
   const metaVersionId = assertVersionId(meta.versionId);
   const existingNames = (await listInstances()).map((i) => i.name);
-  const name = uniqueName(sanitizeName(meta.name || '导入的实例'), existingNames);
+  const name = uniqueName(sanitizeName(meta.name || '导入的版本'), existingNames);
   const created = await createInstance({
     name,
     versionId: metaVersionId,
@@ -395,6 +435,7 @@ module.exports = {
   getInstance,
   createInstance,
   createExternalInstance,
+  normalizeInstanceNames,
   gameDirForInstance,
   getGameDir,
   updateInstance,

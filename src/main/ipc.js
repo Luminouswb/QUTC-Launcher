@@ -191,6 +191,7 @@ async function registerIpc({ windows, getMainWindow }) {
 
   handle('app:bootstrap', async () => {
     const config = Config.get();
+    await Instances.normalizeInstanceNames();
     const instances = await Instances.listInstances();
     const installed = await Versions.listInstalledVersions();
     await accountStore.load();
@@ -338,7 +339,7 @@ async function registerIpc({ windows, getMainWindow }) {
     const id = versionId(obj(payload).id);
     const instances = await Instances.listInstances();
     if (instances.some((i) => i.versionId === id)) {
-      throw new Error('该版本仍被实例使用，请先删除相关实例');
+      throw new Error('该版本仍被版本使用，请先删除相关版本');
     }
     const dir = p.versionDir(id);
     if (!dir.startsWith(p.versions)) throw new Error('路径异常');
@@ -356,14 +357,14 @@ async function registerIpc({ windows, getMainWindow }) {
   });
 
   /* ------------------------------------------------------------------ */
-  /* 实例                                                                */
+  /* 版本                                                                */
   /* ------------------------------------------------------------------ */
 
   handle('instances:list', async () => Instances.listInstances());
 
   handle('instances:create', async (payload) => {
     const opts = obj(payload);
-    const name = sanitizeName(text(opts.name, '实例名称', 48), '新实例');
+    const name = sanitizeName(text(opts.name, '版本名称', 48), '新版本');
     const mcVersion = text(opts.mcVersion, 'Minecraft 版本', 40);
     const loaderType = String(opts.loader || 'vanilla');
     if (!LOADERS.has(loaderType)) throw new Error('不支持的加载器');
@@ -408,7 +409,7 @@ async function registerIpc({ windows, getMainWindow }) {
     const opts = obj(payload);
     const id = instanceId(opts.id);
     const patch = {};
-    if (opts.name !== undefined) patch.name = sanitizeName(text(opts.name, '实例名称', 48), '实例');
+    if (opts.name !== undefined) patch.name = sanitizeName(text(opts.name, '版本名称', 48), '版本');
     if (opts.memoryMb !== undefined) patch.memoryMb = Number(opts.memoryMb) || 0;
     if (opts.notes !== undefined) patch.notes = String(opts.notes).slice(0, 500);
     if (opts.jvmArgsExtra !== undefined) patch.jvmArgsExtra = String(opts.jvmArgsExtra).slice(0, 2000);
@@ -481,7 +482,7 @@ async function registerIpc({ windows, getMainWindow }) {
 
   handle('instances:create-external', async (payload) => {
     const opts = obj(payload);
-    const name = sanitizeName(text(opts.name, '实例名称', 48), '外部实例');
+    const name = sanitizeName(text(opts.name, '版本名称', 48), '外部版本');
     const id = versionId(opts.versionId);
     if (!fs.existsSync(p.versionJson(id))) throw new Error('该版本尚未安装，请先在「下载版本」安装');
     const json = await Versions.loadVersionJson(id);
@@ -500,7 +501,7 @@ async function registerIpc({ windows, getMainWindow }) {
       loader,
       externalGameDir: text(opts.folder, '游戏目录', 1000),
     });
-    appendLauncherLog(`[实例] 注册外部目录 ${instance.name} -> ${opts.folder}`);
+    appendLauncherLog(`[版本] 注册外部目录 ${instance.name} -> ${opts.folder}`);
     send('instances:changed', {});
     return instance;
   });
@@ -510,9 +511,9 @@ async function registerIpc({ windows, getMainWindow }) {
     const instance = await Instances.getInstance(id);
     const win = getMainWindow();
     const result = await dialog.showSaveDialog(win, {
-      title: '导出 QUTC 实例',
+      title: '导出 QUTC 版本',
       defaultPath: path.join(app.getPath('documents'), `${sanitizeName(instance.name, 'instance')}.qutc`),
-      filters: [{ name: 'QUTC 实例包', extensions: ['qutc'] }],
+      filters: [{ name: 'QUTC 版本包', extensions: ['qutc'] }],
     });
     if (result.canceled || !result.filePath) return null;
     const dest = result.filePath.toLowerCase().endsWith('.qutc') ? result.filePath : `${result.filePath}.qutc`;
@@ -522,7 +523,7 @@ async function registerIpc({ windows, getMainWindow }) {
         onProgress: ctx.onProgress,
         onPhase: ctx.onPhase,
       });
-      appendLauncherLog(`[实例] 已导出 ${instance.name} -> ${out.file}`);
+      appendLauncherLog(`[版本] 已导出 ${instance.name} -> ${out.file}`);
       return out;
     });
   });
@@ -530,9 +531,9 @@ async function registerIpc({ windows, getMainWindow }) {
   handle('instances:import', async () => {
     const win = getMainWindow();
     const result = await dialog.showOpenDialog(win, {
-      title: '导入 QUTC 实例包',
+      title: '导入 QUTC 版本包',
       properties: ['openFile'],
-      filters: [{ name: 'QUTC 实例包', extensions: ['qutc', 'zip'] }],
+      filters: [{ name: 'QUTC 版本包', extensions: ['qutc', 'zip'] }],
     });
     if (result.canceled || !result.filePaths.length) return null;
     const file = result.filePaths[0];
@@ -566,7 +567,7 @@ async function registerIpc({ windows, getMainWindow }) {
       const started = await game.start(command);
       runningInstanceId = id;
       gameStartedAt = Date.now();
-      appendLauncherLog(`[游戏] 启动实例 ${instance.name} (${instance.versionId})，pid=${started.pid}`);
+      appendLauncherLog(`[游戏] 启动版本 ${instance.name} (${instance.versionId})，pid=${started.pid}`);
       return { pid: started.pid, logFile: started.logFile, versionId: instance.versionId };
     } catch (err) {
       if (config.closeOnLaunch && win) win.show();
@@ -932,12 +933,12 @@ async function registerIpc({ windows, getMainWindow }) {
         return result;
       });
     }
-    return runTask(taskName, { label: '导入实例' }, async (ctx) => {
+    return runTask(taskName, { label: '导入版本' }, async (ctx) => {
       const result = await Instances.importInstance(file, {
         abort: ctx.abort,
         onProgress: ctx.onProgress,
       });
-      appendLauncherLog(`[实例] 导入完成: ${result.instance.name}`);
+      appendLauncherLog(`[版本] 导入完成: ${result.instance.name}`);
       send('instances:changed', {});
       return result;
     });

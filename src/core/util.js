@@ -85,7 +85,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-/** 生成实例 id / 文件名安全 slug（保留中文） */
+/** 生成版本 id / 文件名安全 slug（保留中文） */
 function sanitizeName(name, fallback = 'instance') {
   const cleaned = String(name || '')
     .replace(/[\u0000-\u001f<>:"/\\|?*]/g, '')

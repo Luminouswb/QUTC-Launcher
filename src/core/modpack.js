@@ -6,11 +6,11 @@
  * .mrpack 本质是一个 ZIP，内含 modrinth.index.json：
  * - 列出要下载的模组文件（带 SHA-1 / SHA-512）；
  * - dependencies 指明 Minecraft 与加载器版本；
- * - overrides / client-overrides 是需要覆盖到实例目录的文件。
+ * - overrides / client-overrides 是需要覆盖到版本目录的文件。
  *
  * 本模块不执行包内任何脚本，只做：
  * 1. 校验索引结构；
- * 2. 校验路径留在实例目录内；
+ * 2. 校验路径留在版本目录内；
  * 3. 按官方哈希下载文件；
  * 4. 解压 overrides（复用 zip.js 的防穿越逻辑）。
  */
@@ -125,7 +125,7 @@ async function installMrpack(file, ctx = {}) {
     ctx,
   });
 
-  // 3. 实例
+  // 3. 版本
   const instance = await Instances.createInstance({
     name: info.name,
     versionId: loaderResult.versionId,
@@ -231,7 +231,7 @@ function existsFile(file) {
 }
 
 /**
- * 导入本地 .qutc 实例包与整合包时共用的格式探测
+ * 导入本地 .qutc 版本包与整合包时共用的格式探测
  */
 async function describeMrpack(file) {
   return readMrpackIndex(file);
