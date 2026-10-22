@@ -224,12 +224,25 @@ function renderInstances() {
 }
 
 function directoryGroups() {
-  const groups = new Map();
+  const groups = [];
+  const managed = state.instances.filter((instance) => !instance.external);
+  if (managed.length) {
+    groups.push({
+      key: 'qutc-managed',
+      name: 'QUTC 下载实例',
+      path: 'QUTCData/instances',
+      managed: true,
+      instances: managed,
+    });
+  }
+  const external = new Map();
   for (const instance of state.instances) {
-    if (instance.external && instance.externalPath) {
-      if (!groups.has(instance.externalPath)) groups.set(instance.externalPath, []);
-      groups.get(instance.externalPath).push(instance);
-    }
+    if (!instance.external || !instance.externalPath) continue;
+    if (!external.has(instance.externalPath)) external.set(instance.externalPath, []);
+    external.get(instance.externalPath).push(instance);
+  }
+  for (const [folder, instances] of external) {
+    groups.push({ key: folder, name: directoryName(folder), path: folder, managed: false, instances });
   }
   return groups;
 }
@@ -239,47 +252,60 @@ function renderDirectories() {
   const empty = $('directory-empty');
   clear(grid);
   const groups = directoryGroups();
-  $('directory-count').textContent = `${groups.size} 个项目目录`;
-  grid.hidden = groups.size === 0;
-  empty.hidden = groups.size > 0;
-  for (const [folder, instances] of groups) grid.appendChild(directoryCard(folder, instances));
+  $('directory-count').textContent = `${groups.length} 个项目目录`;
+  grid.hidden = groups.length === 0;
+  empty.hidden = groups.length > 0;
+  for (const group of groups) grid.appendChild(directoryCard(group));
 }
 
-function directoryCard(folder, instances) {
+function directoryCard(group) {
   const card = el('div', 'instance-card');
   const top = el('div', 'instance-top');
   top.appendChild(el('div', 'instance-icon', 'DIR'));
   const title = el('div', 'instance-title');
-  title.appendChild(el('strong', '', directoryName(folder)));
-  const pathText = el('span', 'directory-path', folder);
-  title.appendChild(pathText);
+  title.appendChild(el('strong', '', group.name));
+  title.appendChild(el('span', 'directory-path', group.path));
   top.appendChild(title);
   card.appendChild(top);
 
   const meta = el('div', 'instance-meta');
-  meta.appendChild(el('span', 'pill blue', `${instances.length} 个版本`));
-  meta.appendChild(el('span', 'pill', '原地使用'));
+  meta.appendChild(el('span', 'pill blue', `${group.instances.length} 个版本`));
+  meta.appendChild(el('span', 'pill', group.managed ? '启动器管理' : '原地使用'));
   card.appendChild(meta);
 
   const actions = el('div', 'instance-actions');
   const manage = el('button', 'btn primary', '管理版本');
-  manage.addEventListener('click', () => openDirectoryModal(folder, instances));
+  manage.addEventListener('click', () => openDirectoryModal(group));
   actions.appendChild(manage);
-  const open = el('button', 'btn ghost small', '打开目录');
-  open.addEventListener('click', () => api.instances.openFolder(instances[0].id).catch(showError));
-  actions.appendChild(open);
+  if (group.managed) {
+    const create = el('button', 'btn ghost small', '新建版本');
+    create.addEventListener('click', () => openCreateInstance());
+    actions.appendChild(create);
+  } else {
+    const open = el('button', 'btn ghost small', '打开目录');
+    open.addEventListener('click', () => api.instances.openFolder(group.instances[0].id).catch(showError));
+    actions.appendChild(open);
+  }
   card.appendChild(actions);
   return card;
 }
 
-function openDirectoryModal(folder, instances) {
+function openDirectoryModal(group) {
   openModal({
-    title: directoryName(folder),
-    subtitle: folder,
+    title: group.name,
+    subtitle: group.path,
     wide: true,
     build: (body) => {
-      body.appendChild(el('div', 'hint', `这个目录下有 ${instances.length} 个版本实例，共享同一份 mods / saves / 配置。`));
-      for (const instance of instances) {
+      body.appendChild(
+        el(
+          'div',
+          'hint',
+          group.managed
+            ? `本启动器下载的 ${group.instances.length} 个版本实例，每个版本有独立游戏目录。`
+            : `这个目录下有 ${group.instances.length} 个版本实例，共享同一份 mods / saves / 配置。`,
+        ),
+      );
+      for (const instance of group.instances) {
         const row = el('div', 'dir-version');
         const head = el('div', 'dir-version-head');
         head.appendChild(el('strong', '', instance.name));
@@ -297,7 +323,15 @@ function openDirectoryModal(folder, instances) {
       }
     },
     actions: [
-      { label: '添加版本到此目录', kind: 'primary', onClick: (close) => { close(); addExistingFolder(folder); } },
+      {
+        label: group.managed ? '新建版本' : '添加版本到此目录',
+        kind: 'primary',
+        onClick: (close) => {
+          close();
+          if (group.managed) openCreateInstance();
+          else addExistingFolder(group.path);
+        },
+      },
       { label: '关闭', kind: 'ghost', onClick: (close) => close() },
     ],
   });
